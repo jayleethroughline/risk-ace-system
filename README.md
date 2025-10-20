@@ -111,7 +111,7 @@ Predicts category and risk.
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { playbook, evalLog } from '@/lib/schema';
-import { callLLM } from '@/lib/openai';
+import { callLLM } from '@/lib/models';
 
 export async function POST(req: Request) {
   const { text, true_category, true_risk } = await req.json();

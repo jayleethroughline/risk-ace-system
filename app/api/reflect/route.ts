@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { evalLog, reflections } from '@/lib/schema';
-import { callLLM } from '@/lib/openai';
+import { callLLM } from '@/lib/models';
 import { eq, desc } from 'drizzle-orm';
 
 export async function POST(req: Request) {
