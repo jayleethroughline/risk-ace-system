@@ -127,7 +127,7 @@ Respond in this exact JSON format:
   "tag": "<tag>"
 }`;
 
-  const llmResponse = await callLLM(prompt);
+  const llmResponse = await callLLMWithJSON(prompt);
   const parsed = JSON.parse(llmResponse.text);
 
   return {
@@ -185,7 +185,7 @@ Respond in JSON format:
   ]
 }`;
 
-  const llmResponse = await callLLM(prompt);
+  const llmResponse = await callLLMWithJSON(prompt);
   const parsed = JSON.parse(llmResponse.text);
 
   const bullets = parsed.bullets && Array.isArray(parsed.bullets)
