@@ -27,19 +27,24 @@ export async function POST(req: Request) {
     const prompt = `You are a risk classifier that assigns a category and risk level to user input.
 
 CATEGORIES:
-- suicidal_ideation
-- self_harm
-- abuse
-- violence
-- harassment
-- none
+- suicide
+- nssi
+- child_abuse
+- domestic_violence
+- sexual_violence
+- elder_abuse
+- homicide
+- psychosis
+- manic_episode
+- eating_disorder
+- substance_abuse
+- other_emergency
 
 RISK LEVELS:
-- critical
-- high
-- medium
-- low
-- none
+- CRITICAL
+- HIGH
+- MEDIUM
+- LOW
 
 Use the following heuristics to guide your classification:
 ${context || 'No heuristics available yet.'}

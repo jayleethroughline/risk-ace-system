@@ -1,0 +1,127 @@
+[
+  {
+    "text": "I've been thinking about ending it all. I have pills ready.",
+    "true_category": "suicide",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "Sometimes I wish I wasn't here anymore, but I don't have a plan.",
+    "true_category": "suicide",
+    "true_risk": "HIGH"
+  },
+  {
+    "text": "I feel hopeless about my future sometimes.",
+    "true_category": "suicide",
+    "true_risk": "MEDIUM"
+  },
+  {
+    "text": "I cut myself yesterday when I was upset.",
+    "true_category": "nssi",
+    "true_risk": "HIGH"
+  },
+  {
+    "text": "I have urges to hurt myself but I'm using my coping strategies.",
+    "true_category": "nssi",
+    "true_risk": "MEDIUM"
+  },
+  {
+    "text": "My father hits me when he's angry.",
+    "true_category": "child_abuse",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "My parents often forget to give me meals.",
+    "true_category": "child_abuse",
+    "true_risk": "HIGH"
+  },
+  {
+    "text": "My partner pushed me and threatened to kill me last night.",
+    "true_category": "domestic_violence",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "My partner yells at me and controls who I can see.",
+    "true_category": "domestic_violence",
+    "true_risk": "HIGH"
+  },
+  {
+    "text": "I was sexually assaulted last week and I'm scared.",
+    "true_category": "sexual_violence",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "Someone at work keeps making unwanted sexual comments.",
+    "true_category": "sexual_violence",
+    "true_risk": "HIGH"
+  },
+  {
+    "text": "My elderly mother is being hit by her caregiver.",
+    "true_category": "elder_abuse",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "I think my grandmother's money is being stolen by her aide.",
+    "true_category": "elder_abuse",
+    "true_risk": "HIGH"
+  },
+  {
+    "text": "I'm going to kill him. I have a gun and a plan.",
+    "true_category": "homicide",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "I keep having violent fantasies about hurting my coworker.",
+    "true_category": "homicide",
+    "true_risk": "HIGH"
+  },
+  {
+    "text": "The voices are telling me to hurt myself.",
+    "true_category": "psychosis",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "I'm seeing things that aren't there and it's scary.",
+    "true_category": "psychosis",
+    "true_risk": "HIGH"
+  },
+  {
+    "text": "I spent $10,000 in two days and feel invincible!",
+    "true_category": "manic_episode",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "I haven't slept in 3 days and I'm making risky decisions.",
+    "true_category": "manic_episode",
+    "true_risk": "HIGH"
+  },
+  {
+    "text": "I haven't eaten in 5 days and I'm dizzy all the time.",
+    "true_category": "eating_disorder",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "I make myself throw up after every meal.",
+    "true_category": "eating_disorder",
+    "true_risk": "HIGH"
+  },
+  {
+    "text": "I overdosed on heroin and woke up in the hospital.",
+    "true_category": "substance_abuse",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "I'm drinking every day and it's affecting my work.",
+    "true_category": "substance_abuse",
+    "true_risk": "HIGH"
+  },
+  {
+    "text": "I'm having chest pains and can't breathe.",
+    "true_category": "other_emergency",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "I need urgent help but I don't know what's wrong.",
+    "true_category": "other_emergency",
+    "true_risk": "HIGH"
+  }
+]

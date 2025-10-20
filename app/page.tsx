@@ -11,15 +11,21 @@ export default function Dashboard() {
   const [runningCycle, setRunningCycle] = useState(false);
 
   const categories = [
-    'suicidal_ideation',
-    'self_harm',
-    'abuse',
-    'violence',
-    'harassment',
-    'none',
+    'suicide',
+    'nssi',
+    'child_abuse',
+    'domestic_violence',
+    'sexual_violence',
+    'elder_abuse',
+    'homicide',
+    'psychosis',
+    'manic_episode',
+    'eating_disorder',
+    'substance_abuse',
+    'other_emergency',
   ];
 
-  const riskLevels = ['critical', 'high', 'medium', 'low', 'none'];
+  const riskLevels = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
 
   const handleClassify = async () => {
     if (!text.trim()) {
@@ -105,13 +111,21 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">
-          Risk-ACE Dashboard
-        </h1>
-        <p className="mt-2 text-gray-600">
-          Agentic Context Engine for Risk Classification
-        </p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Risk-ACE Dashboard
+          </h1>
+          <p className="mt-2 text-gray-600">
+            Agentic Context Engine for Risk Classification
+          </p>
+        </div>
+        <a
+          href="/train"
+          className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+        >
+          Training Orchestration
+        </a>
       </div>
 
       <div className="bg-white shadow rounded-lg p-6">

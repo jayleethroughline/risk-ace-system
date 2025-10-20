@@ -8,6 +8,13 @@
       "when": 1760930350257,
       "tag": "0000_thin_loners",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1760935141337,
+      "tag": "0001_zippy_valkyrie",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,67 @@
+[
+  {
+    "text": "I have a suicide plan and I'm going to do it tonight.",
+    "true_category": "suicide",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "Life feels pointless and I don't want to be here.",
+    "true_category": "suicide",
+    "true_risk": "HIGH"
+  },
+  {
+    "text": "I burned myself with a lighter this morning.",
+    "true_category": "nssi",
+    "true_risk": "HIGH"
+  },
+  {
+    "text": "My uncle touches me inappropriately.",
+    "true_category": "child_abuse",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "My boyfriend choked me during our fight.",
+    "true_category": "domestic_violence",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "I was raped by someone I knew.",
+    "true_category": "sexual_violence",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "The nursing home staff is hitting my father.",
+    "true_category": "elder_abuse",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "I'm planning to shoot my neighbor tomorrow.",
+    "true_category": "homicide",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "The voices are telling me to kill people.",
+    "true_category": "psychosis",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "I'm having unprotected sex with strangers, feeling amazing!",
+    "true_category": "manic_episode",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "My heart is racing from not eating for weeks.",
+    "true_category": "eating_disorder",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "I'm going through alcohol withdrawal and shaking badly.",
+    "true_category": "substance_abuse",
+    "true_risk": "CRITICAL"
+  },
+  {
+    "text": "I think I'm having a heart attack right now.",
+    "true_category": "other_emergency",
+    "true_risk": "CRITICAL"
+  }
+]
