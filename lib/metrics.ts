@@ -151,7 +151,7 @@ export function evaluatePredictions(
     risk_f1,
     overall_f1,
     accuracy,
-    category_metrics,
-    risk_metrics,
+    category_metrics: categoryMetrics,
+    risk_metrics: riskMetrics,
   };
 }
