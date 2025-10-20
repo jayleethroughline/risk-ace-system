@@ -9,6 +9,7 @@ export default function Dashboard() {
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [runningCycle, setRunningCycle] = useState(false);
+  const [latency, setLatency] = useState<number | null>(null);
 
   const categories = [
     'suicide',
@@ -35,6 +36,7 @@ export default function Dashboard() {
 
     setLoading(true);
     setResult(null);
+    setLatency(null);
 
     try {
       const response = await fetch('/api/generate', {
@@ -49,6 +51,7 @@ export default function Dashboard() {
 
       const data = await response.json();
       setResult(data);
+      setLatency(data.latency_ms);
     } catch (error) {
       console.error('Error classifying:', error);
       alert('Failed to classify text');
@@ -64,6 +67,7 @@ export default function Dashboard() {
     }
 
     setRunningCycle(true);
+    setLatency(null);
     try {
       // Step 1: Generate classification
       const generateResponse = await fetch('/api/generate', {
@@ -77,6 +81,7 @@ export default function Dashboard() {
       });
       const generateData = await generateResponse.json();
       setResult(generateData);
+      setLatency(generateData.latency_ms);
 
       // Step 2: Reflect on errors
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -218,6 +223,15 @@ export default function Dashboard() {
                   {result.risk_level}
                 </span>
               </div>
+
+              {latency !== null && (
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Latency:</span>
+                  <span className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm">
+                    {latency}ms
+                  </span>
+                </div>
+              )}
 
               {trueCategory && trueRisk && (
                 <div className="mt-4 pt-4 border-t">

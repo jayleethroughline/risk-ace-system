@@ -39,7 +39,7 @@ export interface EpochStatus {
 async function classifyText(
   text: string,
   playbookBullets: Array<{ section: string; content: string }>
-): Promise<{ category: string; risk_level: string }> {
+): Promise<{ category: string; risk_level: string; latency_ms: number }> {
   const context = playbookBullets.map((b) => `[${b.section}] ${b.content}`).join('\n');
 
   const prompt = `You are a risk classifier that assigns a category and risk level to user input.
@@ -72,12 +72,13 @@ Text to classify: "${text}"
 Respond with ONLY valid JSON in this exact format:
 {"category":"<category>","risk_level":"<risk_level>"}`;
 
-  const result = await callLLMWithJSON(prompt);
-  const parsed = JSON.parse(result);
+  const llmResponse = await callLLMWithJSON(prompt);
+  const parsed = JSON.parse(llmResponse.text);
 
   return {
     category: parsed.category?.toLowerCase() || 'other_emergency',
     risk_level: parsed.risk_level?.toUpperCase() || 'MEDIUM',
+    latency_ms: llmResponse.latency_ms,
   };
 }
 
@@ -96,6 +97,7 @@ async function analyzeError(
   key_insight: string;
   affected_section: string;
   tag: string;
+  latency_ms: number;
 }> {
   const prompt = `You are a reflective agent analyzing classification errors.
 
@@ -125,8 +127,8 @@ Respond in this exact JSON format:
   "tag": "<tag>"
 }`;
 
-  const result = await callLLM(prompt);
-  const parsed = JSON.parse(result);
+  const llmResponse = await callLLM(prompt);
+  const parsed = JSON.parse(llmResponse.text);
 
   return {
     error_type: parsed.error_type || 'unknown_error',
@@ -134,6 +136,7 @@ Respond in this exact JSON format:
     key_insight: parsed.key_insight || '',
     affected_section: parsed.affected_section || trueCategory,
     tag: parsed.tag || 'general',
+    latency_ms: llmResponse.latency_ms,
   };
 }
 
@@ -149,7 +152,7 @@ async function generateHeuristics(
     tag: string;
   },
   currentPlaybook: Array<{ section: string; content: string }>
-): Promise<Array<{ section: string; content: string }>> {
+): Promise<{ bullets: Array<{ section: string; content: string }>; latency_ms: number }> {
   const playbookContext = currentPlaybook
     .map((b) => `[${b.section}] ${b.content}`)
     .join('\n');
@@ -182,17 +185,20 @@ Respond in JSON format:
   ]
 }`;
 
-  const result = await callLLM(prompt);
-  const parsed = JSON.parse(result);
+  const llmResponse = await callLLM(prompt);
+  const parsed = JSON.parse(llmResponse.text);
 
-  if (parsed.bullets && Array.isArray(parsed.bullets)) {
-    return parsed.bullets.map((b: any) => ({
-      section: b.section || reflection.affected_section,
-      content: b.content || '',
-    }));
-  }
+  const bullets = parsed.bullets && Array.isArray(parsed.bullets)
+    ? parsed.bullets.map((b: any) => ({
+        section: b.section || reflection.affected_section,
+        content: b.content || '',
+      }))
+    : [];
 
-  return [];
+  return {
+    bullets,
+    latency_ms: llmResponse.latency_ms,
+  };
 }
 
 /**
@@ -239,13 +245,16 @@ export async function runTrainingEpoch(
       true_category: string;
       true_risk: string;
     }> = [];
+    let totalGeneratorLatency = 0;
 
     for (const sample of evalDataset) {
       try {
-        const { category, risk_level } = await classifyText(
+        const { category, risk_level, latency_ms } = await classifyText(
           sample.text || '',
           currentPlaybook
         );
+
+        totalGeneratorLatency += latency_ms;
 
         predictions.push({
           input_text: sample.text || '',
@@ -274,6 +283,8 @@ export async function runTrainingEpoch(
       }
     }
 
+    const avgGeneratorLatency = predictions.length > 0 ? Math.round(totalGeneratorLatency / predictions.length) : 0;
+
     // Log Generator activity
     await db.insert(agentLog).values({
       run_id: config.run_id,
@@ -281,8 +292,13 @@ export async function runTrainingEpoch(
       agent_type: 'generator',
       system_prompt: 'Risk classifier using playbook heuristics',
       input_summary: `Classified ${evalDataset.length} samples`,
-      output_summary: `Generated ${predictions.length} predictions, ${errors.length} errors found`,
-      details: { predictions_count: predictions.length, errors_count: errors.length },
+      output_summary: `Generated ${predictions.length} predictions, ${errors.length} errors found. Avg latency: ${avgGeneratorLatency}ms`,
+      details: {
+        predictions_count: predictions.length,
+        errors_count: errors.length,
+        total_latency_ms: totalGeneratorLatency,
+        avg_latency_ms: avgGeneratorLatency,
+      },
     });
 
     // 4. Calculate metrics
@@ -307,6 +323,7 @@ export async function runTrainingEpoch(
     // 6. Run Reflector on errors (limit to top 10 to avoid overwhelming)
     const reflectionResults = [];
     const errorsToAnalyze = errors.slice(0, 10);
+    let totalReflectorLatency = 0;
 
     for (const error of errorsToAnalyze) {
       try {
@@ -318,9 +335,17 @@ export async function runTrainingEpoch(
           error.true_risk
         );
 
+        totalReflectorLatency += reflection.latency_ms;
+
         const [inserted] = await db
           .insert(reflections)
-          .values(reflection)
+          .values({
+            error_type: reflection.error_type,
+            correct_approach: reflection.correct_approach,
+            key_insight: reflection.key_insight,
+            affected_section: reflection.affected_section,
+            tag: reflection.tag,
+          })
           .returning();
 
         reflectionResults.push(inserted);
@@ -330,6 +355,8 @@ export async function runTrainingEpoch(
       }
     }
 
+    const avgReflectorLatency = reflectionResults.length > 0 ? Math.round(totalReflectorLatency / reflectionResults.length) : 0;
+
     // Log Reflector activity
     if (reflectionResults.length > 0) {
       await db.insert(agentLog).values({
@@ -338,18 +365,25 @@ export async function runTrainingEpoch(
         agent_type: 'reflector',
         system_prompt: 'Error analysis and insight generation',
         input_summary: `Analyzed ${errorsToAnalyze.length} classification errors`,
-        output_summary: `Generated ${reflectionResults.length} reflections`,
-        details: { reflections: reflectionResults },
+        output_summary: `Generated ${reflectionResults.length} reflections. Avg latency: ${avgReflectorLatency}ms`,
+        details: {
+          reflections: reflectionResults,
+          total_latency_ms: totalReflectorLatency,
+          avg_latency_ms: avgReflectorLatency,
+        },
       });
     }
 
     // 7. Run Curator to generate new heuristics
     let heuristicsAdded = 0;
     const newHeuristics = [];
+    let totalCuratorLatency = 0;
 
     for (const reflection of reflectionResults) {
       try {
-        const bullets = await generateHeuristics(reflection, currentPlaybook);
+        const { bullets, latency_ms } = await generateHeuristics(reflection, currentPlaybook);
+
+        totalCuratorLatency += latency_ms;
 
         for (const bullet of bullets) {
           const bullet_id = `${bullet.section}_${Date.now()}_${Math.random()
@@ -384,6 +418,8 @@ export async function runTrainingEpoch(
         .where(eq(epochResult.epoch_id, savedEpoch.epoch_id));
     }
 
+    const avgCuratorLatency = reflectionResults.length > 0 ? Math.round(totalCuratorLatency / reflectionResults.length) : 0;
+
     // Log Curator activity
     if (heuristicsAdded > 0) {
       await db.insert(agentLog).values({
@@ -392,8 +428,12 @@ export async function runTrainingEpoch(
         agent_type: 'curator',
         system_prompt: 'Playbook heuristic generation',
         input_summary: `Processed ${reflectionResults.length} reflections`,
-        output_summary: `Added ${heuristicsAdded} new heuristics to playbook`,
-        details: { new_heuristics: newHeuristics },
+        output_summary: `Added ${heuristicsAdded} new heuristics to playbook. Avg latency: ${avgCuratorLatency}ms`,
+        details: {
+          new_heuristics: newHeuristics,
+          total_latency_ms: totalCuratorLatency,
+          avg_latency_ms: avgCuratorLatency,
+        },
       });
     }
 

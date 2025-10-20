@@ -4,11 +4,18 @@ import { GoogleGenAI } from '@google/genai';
 // The client automatically picks up GEMINI_API_KEY from environment variables
 const ai = new GoogleGenAI({});
 
+export interface LLMResponse {
+  text: string;
+  latency_ms: number;
+}
+
 export async function callLLM(
   prompt: string,
   model: string = 'gemini-2.5-flash',
   temperature: number = 0.7
-): Promise<string> {
+): Promise<LLMResponse> {
+  const startTime = Date.now();
+
   try {
     const systemPrompt =
       'You are a helpful assistant that responds concisely and accurately.';
@@ -23,7 +30,13 @@ export async function callLLM(
       },
     });
 
-    return response.text || '';
+    const endTime = Date.now();
+    const latency_ms = endTime - startTime;
+
+    return {
+      text: response.text || '',
+      latency_ms,
+    };
   } catch (error) {
     console.error('Error calling LLM:', error);
     throw error;
@@ -33,7 +46,9 @@ export async function callLLM(
 export async function callLLMWithJSON(
   prompt: string,
   model: string = 'gemini-2.5-flash'
-): Promise<string> {
+): Promise<LLMResponse> {
+  const startTime = Date.now();
+
   try {
     const systemPrompt =
       'You are a helpful assistant that responds only with valid JSON. Do not include any markdown formatting or code blocks, just the raw JSON.';
@@ -54,7 +69,13 @@ export async function callLLMWithJSON(
     // Clean up markdown code blocks if present (fallback)
     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
-    return text;
+    const endTime = Date.now();
+    const latency_ms = endTime - startTime;
+
+    return {
+      text,
+      latency_ms,
+    };
   } catch (error) {
     console.error('Error calling LLM with JSON:', error);
     throw error;

@@ -71,8 +71,8 @@ Respond in JSON format:
 }`;
 
       try {
-        const result = await callLLM(prompt);
-        const parsed = JSON.parse(result);
+        const llmResponse = await callLLM(prompt);
+        const parsed = JSON.parse(llmResponse.text);
 
         if (parsed.bullets && Array.isArray(parsed.bullets)) {
           for (const bullet of parsed.bullets) {

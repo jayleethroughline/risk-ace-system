@@ -67,9 +67,9 @@ Respond in this exact JSON format:
 }`;
 
       try {
-        const result = await callLLM(prompt);
+        const llmResponse = await callLLM(prompt);
         // Try to parse as JSON
-        const reflection = JSON.parse(result);
+        const reflection = JSON.parse(llmResponse.text);
 
         // Store the reflection
         const inserted = await db

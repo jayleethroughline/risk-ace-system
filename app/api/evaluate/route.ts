@@ -63,11 +63,18 @@ export async function GET(req: Request) {
       const total = logs.length;
       const accuracy = total > 0 ? correct / total : 0;
 
+      // Calculate average latency
+      const logsWithLatency = logs.filter((log) => log.latency_ms !== null);
+      const avgLatency = logsWithLatency.length > 0
+        ? Math.round(logsWithLatency.reduce((sum, log) => sum + (log.latency_ms || 0), 0) / logsWithLatency.length)
+        : null;
+
       return NextResponse.json({
         overall: {
           accuracy: Math.round(accuracy * 1000) / 1000,
           correct,
           total,
+          avg_latency_ms: avgLatency,
         },
       });
     }

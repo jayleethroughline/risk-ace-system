@@ -15,6 +15,13 @@
       "when": 1760935141337,
       "tag": "0001_zippy_valkyrie",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1760985860100,
+      "tag": "0002_lush_jetstream",
+      "breakpoints": true
     }
   ]
 }

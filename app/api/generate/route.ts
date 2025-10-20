@@ -54,8 +54,8 @@ Text to classify: "${text}"
 Respond with ONLY valid JSON in this exact format:
 {"category":"<category>","risk_level":"<risk_level>"}`;
 
-    const result = await callLLMWithJSON(prompt);
-    const { category, risk_level } = JSON.parse(result);
+    const llmResponse = await callLLMWithJSON(prompt);
+    const { category, risk_level } = JSON.parse(llmResponse.text);
 
     // Log the evaluation if true labels are provided
     if (true_category && true_risk) {
@@ -69,10 +69,15 @@ Respond with ONLY valid JSON in this exact format:
         true_category,
         true_risk,
         correct,
+        latency_ms: llmResponse.latency_ms,
       });
     }
 
-    return NextResponse.json({ category, risk_level });
+    return NextResponse.json({
+      category,
+      risk_level,
+      latency_ms: llmResponse.latency_ms
+    });
   } catch (error) {
     console.error('Error in generate route:', error);
     return NextResponse.json(

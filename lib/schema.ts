@@ -17,6 +17,7 @@ export const evalLog = pgTable('eval_log', {
   true_category: text('true_category'),
   true_risk: text('true_risk'),
   correct: integer('correct'),
+  latency_ms: integer('latency_ms'),
   timestamp: timestamp('timestamp').defaultNow(),
 });
 

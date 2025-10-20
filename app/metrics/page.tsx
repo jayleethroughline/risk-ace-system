@@ -165,23 +165,38 @@ export default function MetricsPage() {
       {selectedView === 'overall' && overallMetrics && (
         <>
           {overallMetrics.overall ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {renderMetricCard(
-                'Overall Accuracy',
-                overallMetrics.overall.accuracy,
-                `${overallMetrics.overall.correct} / ${overallMetrics.overall.total} correct`
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {renderMetricCard(
+                  'Overall Accuracy',
+                  overallMetrics.overall.accuracy,
+                  `${overallMetrics.overall.correct} / ${overallMetrics.overall.total} correct`
+                )}
+                {renderMetricCard(
+                  'Correct Predictions',
+                  overallMetrics.overall.correct / overallMetrics.overall.total,
+                  `${overallMetrics.overall.correct} predictions`
+                )}
+                {renderMetricCard(
+                  'Total Evaluations',
+                  1,
+                  `${overallMetrics.overall.total} samples`
+                )}
+              </div>
+              {overallMetrics.overall.avg_latency_ms !== null && (
+                <div className="bg-white shadow rounded-lg p-6">
+                  <div className="text-sm font-medium text-gray-500 uppercase tracking-wide">
+                    Average API Latency
+                  </div>
+                  <div className="mt-2 text-3xl font-bold text-gray-900">
+                    {overallMetrics.overall.avg_latency_ms}ms
+                  </div>
+                  <div className="mt-1 text-sm text-gray-500">
+                    Average time for LLM API response
+                  </div>
+                </div>
               )}
-              {renderMetricCard(
-                'Correct Predictions',
-                overallMetrics.overall.correct / overallMetrics.overall.total,
-                `${overallMetrics.overall.correct} predictions`
-              )}
-              {renderMetricCard(
-                'Total Evaluations',
-                1,
-                `${overallMetrics.overall.total} samples`
-              )}
-            </div>
+            </>
           ) : (
             <div className="bg-white shadow rounded-lg p-12 text-center">
               <p className="text-gray-500 text-lg">

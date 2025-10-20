@@ -1,0 +1,1 @@
+ALTER TABLE "eval_log" ADD COLUMN "latency_ms" integer;
