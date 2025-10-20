@@ -1,48 +1,29 @@
-// Using Google Gemini API instead of OpenAI
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+// Using Google Gemini API with official SDK
+import { GoogleGenAI } from '@google/genai';
+
+// The client automatically picks up GEMINI_API_KEY from environment variables
+const ai = new GoogleGenAI({});
 
 export async function callLLM(
   prompt: string,
-  model: string = 'gemini-2.0-flash-exp',
+  model: string = 'gemini-2.5-flash',
   temperature: number = 0.7
 ): Promise<string> {
   try {
-    const systemPrompt = 'You are a helpful assistant that responds concisely and accurately.';
+    const systemPrompt =
+      'You are a helpful assistant that responds concisely and accurately.';
     const fullPrompt = `${systemPrompt}\n\n${prompt}`;
 
-    const response = await fetch(
-      `${GEMINI_API_BASE}/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: fullPrompt,
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            temperature,
-            maxOutputTokens: 2048,
-          },
-        }),
-      }
-    );
+    const response = await ai.models.generateContent({
+      model,
+      contents: fullPrompt,
+      config: {
+        temperature,
+        maxOutputTokens: 2048,
+      },
+    });
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Gemini API error: ${response.status} - ${error}`);
-    }
-
-    const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    return response.text || '';
   } catch (error) {
     console.error('Error calling LLM:', error);
     throw error;
@@ -51,46 +32,26 @@ export async function callLLM(
 
 export async function callLLMWithJSON(
   prompt: string,
-  model: string = 'gemini-2.0-flash-exp'
+  model: string = 'gemini-2.5-flash'
 ): Promise<string> {
   try {
-    const systemPrompt = 'You are a helpful assistant that responds only with valid JSON. Do not include any markdown formatting or code blocks, just the raw JSON.';
+    const systemPrompt =
+      'You are a helpful assistant that responds only with valid JSON. Do not include any markdown formatting or code blocks, just the raw JSON.';
     const fullPrompt = `${systemPrompt}\n\n${prompt}`;
 
-    const response = await fetch(
-      `${GEMINI_API_BASE}/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: fullPrompt,
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 2048,
-          },
-        }),
-      }
-    );
+    const response = await ai.models.generateContent({
+      model,
+      contents: fullPrompt,
+      config: {
+        temperature: 0.7,
+        maxOutputTokens: 2048,
+        responseMimeType: 'application/json',
+      },
+    });
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Gemini API error: ${response.status} - ${error}`);
-    }
+    let text = response.text || '{}';
 
-    const data = await response.json();
-    let text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-
-    // Clean up markdown code blocks if present
+    // Clean up markdown code blocks if present (fallback)
     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
     return text;

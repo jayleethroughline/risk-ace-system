@@ -12,6 +12,7 @@
     "db:seed": "tsx scripts/seed-playbook.ts"
   },
   "dependencies": {
+    "@google/genai": "^1.25.0",
     "@vercel/postgres": "^0.10.0",
     "drizzle-orm": "^0.44.6",
     "next": "^14.2.33",
