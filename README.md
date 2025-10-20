@@ -1,6 +1,6 @@
 # 🧩 Risk-ACE System Design
 **(Agentic Context Engine for Risk Classification)**
-Built with **Next.js 14**, **Vercel Postgres**, **Drizzle ORM**, and **Serverless API routes**
+Built with **Next.js 14**, **Neon Postgres**, **Drizzle ORM**, **Google Gemini**, and **Serverless API routes**
 
 ---
 
@@ -34,7 +34,7 @@ Serverless API Routes (Next.js /api)
   ├─ /api/evaluate → F1 metrics
   └─ /api/playbook → CRUD for heuristics
 
-Data Layer (Vercel Postgres via Drizzle)
+Data Layer (Neon Postgres via Drizzle)
   ├─ playbook
   ├─ eval_log
   └─ reflections
@@ -148,8 +148,8 @@ export async function POST(req: Request) {
 
 ### Prerequisites
 - Node.js 18+
-- Vercel account (for Postgres)
-- OpenAI API key
+- Neon account (for Postgres database)
+- Google Gemini API key
 
 ### Installation
 ```bash
@@ -159,8 +159,8 @@ npm install
 ### Environment Variables
 Create a `.env.local` file:
 ```
-POSTGRES_URL=your_vercel_postgres_url
-OPENAI_API_KEY=your_openai_key
+POSTGRES_URL=your_neon_postgres_url
+GEMINI_API_KEY=your_gemini_api_key
 ```
 
 ### Run Development Server
