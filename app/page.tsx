@@ -1,128 +1,209 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-export default function Dashboard() {
-  const [text, setText] = useState('');
-  const [trueCategory, setTrueCategory] = useState('');
-  const [trueRisk, setTrueRisk] = useState('');
-  const [result, setResult] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [runningCycle, setRunningCycle] = useState(false);
-  const [latency, setLatency] = useState<number | null>(null);
+interface EpochData {
+  epoch_number: number;
+  overall_f1: number;
+  category_f1: number;
+  risk_f1: number;
+  accuracy: number;
+  playbook_size: number;
+  errors_found: number;
+  heuristics_added: number;
+}
 
-  const categories = [
-    'suicide',
-    'nssi',
-    'child_abuse',
-    'domestic_violence',
-    'sexual_violence',
-    'elder_abuse',
-    'homicide',
-    'psychosis',
-    'manic_episode',
-    'eating_disorder',
-    'substance_abuse',
-    'other_emergency',
-  ];
+interface TrainingRunSummary {
+  run_id: number;
+  name: string;
+  status: string;
+  started_at: string | null;
+  completed_at: string | null;
+  best_epoch: {
+    epoch_number: number;
+    overall_f1: number;
+    category_f1: number;
+    risk_f1: number;
+    accuracy: number;
+  } | null;
+  epochs: EpochData[];
+  dataset: {
+    training_samples: number;
+    eval_samples: number;
+  };
+}
 
-  const riskLevels = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+interface Reflection {
+  reflection_id: number;
+  run_id: number;
+  epoch_number: number;
+  error_type: string;
+  correct_approach: string;
+  key_insight: string;
+  affected_section: string;
+  tag: string;
+  input_text: string;
+  predicted: string;
+  expected: string;
+  created_at: string;
+}
 
-  const handleClassify = async () => {
-    if (!text.trim()) {
-      alert('Please enter text to classify');
-      return;
+interface Heuristic {
+  bullet_id: string;
+  section: string;
+  content: string;
+  helpful_count: number;
+  harmful_count: number;
+  run_id: number;
+  epoch_number: number;
+  last_updated: string;
+}
+
+export default function MetricsPage() {
+  const [runs, setRuns] = useState<TrainingRunSummary[]>([]);
+  const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [reflections, setReflections] = useState<Reflection[]>([]);
+  const [heuristics, setHeuristics] = useState<Heuristic[]>([]);
+  const [expandedEpochs, setExpandedEpochs] = useState<Set<number>>(new Set());
+  const [stoppingRunId, setStoppingRunId] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetchAllRuns();
+  }, []);
+
+  useEffect(() => {
+    if (selectedRunId) {
+      fetchAgentWork(selectedRunId);
     }
+  }, [selectedRunId]);
 
+  const fetchAllRuns = async () => {
     setLoading(true);
-    setResult(null);
-    setLatency(null);
-
     try {
-      const response = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text,
-          true_category: trueCategory || undefined,
-          true_risk: trueRisk || undefined,
-        }),
-      });
+      // Get all runs from the debug endpoint
+      const debugResponse = await fetch('/api/debug/data-count');
+      const debugData = await debugResponse.json();
 
-      const data = await response.json();
-      setResult(data);
-      setLatency(data.latency_ms);
+      // Fetch status for each run
+      const runDetails = await Promise.all(
+        debugData.runs.map(async (run: any) => {
+          const statusResponse = await fetch(`/api/training/status?run_id=${run.run_id}`);
+          return statusResponse.json();
+        })
+      );
+
+      setRuns(runDetails);
+
+      // Auto-select the latest completed or running run
+      const latestRun = runDetails
+        .filter((r: any) => r.status === 'completed' || r.status === 'running')
+        .sort((a: any, b: any) => b.run_id - a.run_id)[0];
+
+      if (latestRun) {
+        setSelectedRunId(latestRun.run_id);
+      }
     } catch (error) {
-      console.error('Error classifying:', error);
-      alert('Failed to classify text');
+      console.error('Error fetching runs:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const runFullCycle = async () => {
-    if (!text.trim() || !trueCategory || !trueRisk) {
-      alert('Please fill in all fields for a full cycle');
-      return;
-    }
-
-    setRunningCycle(true);
-    setLatency(null);
+  const fetchAgentWork = async (runId: number) => {
     try {
-      // Step 1: Generate classification
-      const generateResponse = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text,
-          true_category: trueCategory,
-          true_risk: trueRisk,
-        }),
-      });
-      const generateData = await generateResponse.json();
-      setResult(generateData);
-      setLatency(generateData.latency_ms);
+      const [reflectionsRes, heuristicsRes] = await Promise.all([
+        fetch(`/api/training/reflections?run_id=${runId}`),
+        fetch(`/api/training/heuristics?run_id=${runId}`)
+      ]);
 
-      // Step 2: Reflect on errors
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      await fetch('/api/reflect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
+      const reflectionsData = await reflectionsRes.json();
+      const heuristicsData = await heuristicsRes.json();
 
-      // Step 3: Curate playbook
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      await fetch('/api/curate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-
-      alert('Full ACE cycle completed! Check Playbook and Metrics pages.');
+      setReflections(reflectionsData);
+      setHeuristics(heuristicsData);
     } catch (error) {
-      console.error('Error running cycle:', error);
-      alert('Failed to complete cycle');
-    } finally {
-      setRunningCycle(false);
+      console.error('Error fetching agent work:', error);
     }
   };
 
-  const isCorrect = result &&
-    trueCategory &&
-    trueRisk &&
-    result.category === trueCategory &&
-    result.risk_level === trueRisk;
+  const toggleEpoch = (epochNumber: number) => {
+    setExpandedEpochs(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(epochNumber)) {
+        newSet.delete(epochNumber);
+      } else {
+        newSet.add(epochNumber);
+      }
+      return newSet;
+    });
+  };
+
+  const stopRun = async (runId: number, event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent row selection
+
+    if (!confirm(`Are you sure you want to stop training run #${runId}?`)) {
+      return;
+    }
+
+    setStoppingRunId(runId);
+    try {
+      const response = await fetch('/api/training/stop', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ run_id: runId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to stop training run');
+      }
+
+      // Refresh runs list
+      await fetchAllRuns();
+    } catch (error) {
+      console.error('Error stopping run:', error);
+      alert(error instanceof Error ? error.message : 'Failed to stop training run');
+    } finally {
+      setStoppingRunId(null);
+    }
+  };
+
+  const selectedRun = runs.find(r => r.run_id === selectedRunId);
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return 'N/A';
+    return new Date(dateStr).toLocaleString();
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed': return 'text-green-600 bg-green-100';
+      case 'running': return 'text-blue-600 bg-blue-100';
+      case 'stopped': return 'text-orange-600 bg-orange-100';
+      case 'failed': return 'text-red-600 bg-red-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="text-lg text-gray-600">Loading training runs...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Risk-ACE Dashboard
-          </h1>
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
           <p className="mt-2 text-gray-600">
-            Agentic Context Engine for Risk Classification
+            View performance metrics and epoch history for all training runs
           </p>
         </div>
         <a
@@ -133,144 +214,376 @@ export default function Dashboard() {
         </a>
       </div>
 
-      <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-xl font-semibold mb-4">Classify Text</h2>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Input Text
-            </label>
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              rows={4}
-              placeholder="Enter text to classify..."
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                True Category (optional)
-              </label>
-              <select
-                value={trueCategory}
-                onChange={(e) => setTrueCategory(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">-- Select Category --</option>
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                True Risk Level (optional)
-              </label>
-              <select
-                value={trueRisk}
-                onChange={(e) => setTrueRisk(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">-- Select Risk Level --</option>
-                {riskLevels.map((risk) => (
-                  <option key={risk} value={risk}>
-                    {risk}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="flex space-x-4">
-            <button
-              onClick={handleClassify}
-              disabled={loading || runningCycle}
-              className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Classifying...' : 'Classify'}
-            </button>
-
-            <button
-              onClick={runFullCycle}
-              disabled={loading || runningCycle}
-              className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
-              {runningCycle ? 'Running Cycle...' : 'Run Full ACE Cycle'}
-            </button>
-          </div>
+      {runs.length === 0 ? (
+        <div className="bg-white shadow rounded-lg p-12 text-center">
+          <p className="text-gray-500 text-lg">
+            No training runs found. Start a training run from the Train page.
+          </p>
         </div>
-
-        {result && (
-          <div className="mt-6 p-4 bg-gray-50 rounded-md border border-gray-200">
-            <h3 className="text-lg font-semibold mb-2">Classification Result</h3>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-medium">Category:</span>
-                <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
-                  {result.category}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="font-medium">Risk Level:</span>
-                <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm">
-                  {result.risk_level}
-                </span>
-              </div>
-
-              {latency !== null && (
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">Latency:</span>
-                  <span className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm">
-                    {latency}ms
-                  </span>
-                </div>
-              )}
-
-              {trueCategory && trueRisk && (
-                <div className="mt-4 pt-4 border-t">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">Accuracy:</span>
-                    <span
-                      className={`px-3 py-1 rounded-full text-sm ${
-                        isCorrect
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
+      ) : (
+        <>
+          {/* Runs List */}
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-xl font-semibold">All Training Runs</h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Run ID
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Dataset
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Best F1
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Best Accuracy
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Epochs
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Started
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {runs.map((run) => (
+                    <tr
+                      key={run.run_id}
+                      onClick={() => setSelectedRunId(run.run_id)}
+                      className={`cursor-pointer hover:bg-gray-50 ${
+                        selectedRunId === run.run_id ? 'bg-blue-50' : ''
                       }`}
                     >
-                      {isCorrect ? 'Correct' : 'Incorrect'}
-                    </span>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        #{run.run_id}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {run.name}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(run.status)}`}>
+                            {run.status}
+                          </span>
+                          {run.status === 'running' && (
+                            <button
+                              onClick={(e) => stopRun(run.run_id, e)}
+                              disabled={stoppingRunId === run.run_id}
+                              className="px-2 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded border border-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Stop training run"
+                            >
+                              {stoppingRunId === run.run_id ? 'Stopping...' : 'Stop'}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {run.dataset.training_samples} train / {run.dataset.eval_samples} eval
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-600">
+                        {run.best_epoch ? (run.best_epoch.overall_f1 * 100).toFixed(1) + '%' : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {run.best_epoch ? (run.best_epoch.accuracy * 100).toFixed(1) + '%' : 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {run.epochs.length}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {formatDate(run.started_at)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Selected Run Details */}
+          {selectedRun && (
+            <>
+              {/* Epoch History */}
+              {selectedRun.epochs.length > 0 && (
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h3 className="text-lg font-semibold mb-4">Epoch History</h3>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Epoch
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Overall F1
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Category F1
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Risk F1
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Accuracy
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Playbook Size
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Errors
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Heuristics Added
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {selectedRun.epochs.map((epoch) => (
+                          <tr key={epoch.epoch_number} className={
+                            selectedRun.best_epoch?.epoch_number === epoch.epoch_number
+                              ? 'bg-yellow-50'
+                              : ''
+                          }>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {epoch.epoch_number}
+                              {selectedRun.best_epoch?.epoch_number === epoch.epoch_number && (
+                                <span className="ml-2 text-xs text-yellow-600">★ Best</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-blue-600">
+                              {(epoch.overall_f1 * 100).toFixed(1)}%
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                              {(epoch.category_f1 * 100).toFixed(1)}%
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                              {(epoch.risk_f1 * 100).toFixed(1)}%
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                              {(epoch.accuracy * 100).toFixed(1)}%
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                              {epoch.playbook_size}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                              {epoch.errors_found}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                              {epoch.heuristics_added}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
-            </div>
-          </div>
-        )}
-      </div>
 
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-blue-900 mb-2">
-          How the ACE System Works
-        </h3>
-        <ol className="list-decimal list-inside space-y-2 text-blue-800">
-          <li>
-            <strong>Generator</strong> classifies text using current playbook heuristics
-          </li>
-          <li>
-            <strong>Reflector</strong> analyzes errors and creates insights
-          </li>
-          <li>
-            <strong>Curator</strong> updates the playbook based on reflections
-          </li>
-          <li>System continuously improves through context evolution</li>
-        </ol>
-      </div>
+              {/* Learning Progress Chart (text-based visualization) */}
+              {selectedRun.epochs.length > 1 && (
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h3 className="text-lg font-semibold mb-4">Learning Progress</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-gray-600">Overall F1 Score</span>
+                        <span className="font-semibold text-blue-600">
+                          {(selectedRun.epochs[selectedRun.epochs.length - 1].overall_f1 * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-3">
+                        <div
+                          className="bg-blue-600 h-3 rounded-full transition-all duration-300"
+                          style={{
+                            width: `${selectedRun.epochs[selectedRun.epochs.length - 1].overall_f1 * 100}%`
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-gray-600">Accuracy</span>
+                        <span className="font-semibold text-orange-600">
+                          {(selectedRun.epochs[selectedRun.epochs.length - 1].accuracy * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-3">
+                        <div
+                          className="bg-orange-600 h-3 rounded-full transition-all duration-300"
+                          style={{
+                            width: `${selectedRun.epochs[selectedRun.epochs.length - 1].accuracy * 100}%`
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-600 mt-4">
+                      <span className="font-medium">Improvement:</span> From {(selectedRun.epochs[0].overall_f1 * 100).toFixed(1)}% (Epoch 1)
+                      to {(selectedRun.epochs[selectedRun.epochs.length - 1].overall_f1 * 100).toFixed(1)}% (Epoch {selectedRun.epochs.length})
+                      {' '}
+                      <span className="text-green-600 font-semibold">
+                        (+{((selectedRun.epochs[selectedRun.epochs.length - 1].overall_f1 - selectedRun.epochs[0].overall_f1) * 100).toFixed(1)}%)
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Agent Work: Reflector & Curator */}
+              {selectedRun.epochs.length > 0 && (
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h3 className="text-lg font-semibold mb-4">Reflector & Curator Work</h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    View what the Reflector (error analysis) and Curator (heuristic generation) agents did in each epoch
+                  </p>
+                  <div className="space-y-2">
+                    {selectedRun.epochs.map((epoch) => {
+                      const epochReflections = reflections.filter(r => r.epoch_number === epoch.epoch_number);
+                      const epochHeuristics = heuristics.filter(h => h.epoch_number === epoch.epoch_number);
+                      const isExpanded = expandedEpochs.has(epoch.epoch_number);
+
+                      return (
+                        <div key={epoch.epoch_number} className="border border-gray-200 rounded-lg overflow-hidden">
+                          <button
+                            onClick={() => toggleEpoch(epoch.epoch_number)}
+                            className="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 flex justify-between items-center text-left"
+                          >
+                            <div className="flex items-center gap-4">
+                              <span className="font-semibold text-gray-900">
+                                Epoch {epoch.epoch_number}
+                              </span>
+                              <span className="text-sm text-gray-600">
+                                {epochReflections.length} reflection{epochReflections.length !== 1 ? 's' : ''}
+                              </span>
+                              <span className="text-sm text-gray-600">
+                                {epochHeuristics.length} heuristic{epochHeuristics.length !== 1 ? 's' : ''} added
+                              </span>
+                            </div>
+                            <span className="text-gray-500">
+                              {isExpanded ? '▼' : '▶'}
+                            </span>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="p-4 space-y-4">
+                              {/* Reflections Section */}
+                              {epochReflections.length > 0 && (
+                                <div>
+                                  <h4 className="font-semibold text-purple-700 mb-2 flex items-center gap-2">
+                                    <span className="text-lg">🔍</span>
+                                    Reflector Analysis ({epochReflections.length})
+                                  </h4>
+                                  <div className="space-y-3">
+                                    {epochReflections.map((reflection) => (
+                                      <div key={reflection.reflection_id} className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                                        <div className="flex items-start gap-3">
+                                          <div className="flex-1 space-y-2">
+                                            <div className="flex items-center gap-2">
+                                              <span className="px-2 py-1 bg-purple-200 text-purple-800 text-xs font-semibold rounded">
+                                                {reflection.error_type}
+                                              </span>
+                                              {reflection.tag && (
+                                                <span className="px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded">
+                                                  {reflection.tag}
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="text-sm">
+                                              <div className="text-gray-600 mb-1">
+                                                <span className="font-medium">Input:</span> {reflection.input_text}
+                                              </div>
+                                              <div className="flex gap-4 text-xs">
+                                                <div>
+                                                  <span className="text-red-600 font-medium">Predicted:</span> {reflection.predicted}
+                                                </div>
+                                                <div>
+                                                  <span className="text-green-600 font-medium">Expected:</span> {reflection.expected}
+                                                </div>
+                                              </div>
+                                            </div>
+                                            <div className="text-sm space-y-1">
+                                              <div>
+                                                <span className="font-medium text-gray-700">Key Insight:</span>{' '}
+                                                <span className="text-gray-600">{reflection.key_insight}</span>
+                                              </div>
+                                              <div>
+                                                <span className="font-medium text-gray-700">Correct Approach:</span>{' '}
+                                                <span className="text-gray-600">{reflection.correct_approach}</span>
+                                              </div>
+                                              {reflection.affected_section && (
+                                                <div>
+                                                  <span className="font-medium text-gray-700">Affected Section:</span>{' '}
+                                                  <span className="text-gray-600">{reflection.affected_section}</span>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Heuristics Section */}
+                              {epochHeuristics.length > 0 && (
+                                <div>
+                                  <h4 className="font-semibold text-green-700 mb-2 flex items-center gap-2">
+                                    <span className="text-lg">📝</span>
+                                    Curator Heuristics ({epochHeuristics.length})
+                                  </h4>
+                                  <div className="space-y-2">
+                                    {epochHeuristics.map((heuristic) => (
+                                      <div key={heuristic.bullet_id} className="bg-green-50 border border-green-200 rounded-lg p-3">
+                                        <div className="flex items-start gap-3">
+                                          <div className="flex-1">
+                                            <div className="flex items-center gap-2 mb-2">
+                                              <span className="px-2 py-1 bg-green-200 text-green-800 text-xs font-semibold rounded">
+                                                {heuristic.section}
+                                              </span>
+                                              <div className="flex gap-2 text-xs text-gray-600">
+                                                <span>👍 {heuristic.helpful_count}</span>
+                                                <span>👎 {heuristic.harmful_count}</span>
+                                              </div>
+                                            </div>
+                                            <div className="text-sm text-gray-700">
+                                              {heuristic.content}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {epochReflections.length === 0 && epochHeuristics.length === 0 && (
+                                <div className="text-sm text-gray-500 italic">
+                                  No reflections or heuristics recorded for this epoch
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }

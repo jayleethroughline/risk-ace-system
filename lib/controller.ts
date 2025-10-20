@@ -28,7 +28,7 @@ export interface TrainingConfig {
 
 export interface EpochStatus {
   epoch_number: number;
-  status: 'running' | 'completed' | 'failed';
+  status: 'running' | 'completed' | 'failed' | 'stopped';
   metrics?: EvaluationResult;
   message: string;
 }
@@ -359,11 +359,16 @@ export async function runTrainingEpoch(
         const [inserted] = await db
           .insert(reflections)
           .values({
+            run_id: config.run_id,
+            epoch_number: epochNumber,
             error_type: reflection.error_type,
             correct_approach: reflection.correct_approach,
             key_insight: reflection.key_insight,
             affected_section: reflection.affected_section,
             tag: reflection.tag,
+            input_text: error.text,
+            predicted: `${error.predicted_category}/${error.predicted_risk}`,
+            expected: `${error.true_category}/${error.true_risk}`,
           })
           .returning();
 
@@ -420,6 +425,8 @@ export async function runTrainingEpoch(
               content: bullet.content,
               helpful_count: 0,
               harmful_count: 0,
+              run_id: config.run_id,
+              epoch_number: epochNumber,
             })
             .returning();
 
@@ -519,6 +526,17 @@ export async function runTraining(runId: number): Promise<void> {
 
     // Training loop
     for (let epoch = 1; epoch <= config.max_epochs; epoch++) {
+      // Check if training was stopped by user
+      const [currentRun] = await db
+        .select()
+        .from(trainingRun)
+        .where(eq(trainingRun.run_id, runId));
+
+      if (currentRun.status === 'stopped') {
+        console.log(`🛑 Training run ${runId} was stopped by user`);
+        return;
+      }
+
       const epochStatus = await runTrainingEpoch(config, epoch);
 
       if (epochStatus.status === 'failed') {

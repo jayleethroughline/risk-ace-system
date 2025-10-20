@@ -8,7 +8,18 @@ interface PlaybookEntry {
   content: string | null;
   helpful_count: number | null;
   harmful_count: number | null;
+  run_id: number | null;
+  epoch_number: number | null;
   last_updated: Date | null;
+}
+
+interface HeuristicDetails {
+  reflections: Array<{
+    error_type: string;
+    correct_approach: string;
+    key_insight: string;
+  }>;
+  curatorOutput: string;
 }
 
 export default function PlaybookPage() {
@@ -19,6 +30,9 @@ export default function PlaybookPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newSection, setNewSection] = useState('');
   const [newContent, setNewContent] = useState('');
+  const [hoveredEntry, setHoveredEntry] = useState<string | null>(null);
+  const [heuristicDetails, setHeuristicDetails] = useState<Record<string, HeuristicDetails>>({});
+  const [maxRunId, setMaxRunId] = useState<number>(0);
 
   useEffect(() => {
     fetchPlaybook();
@@ -28,11 +42,38 @@ export default function PlaybookPage() {
     try {
       const response = await fetch('/api/playbook');
       const data = await response.json();
-      setPlaybook(data.playbook || []);
+      const entries = data.playbook || [];
+      setPlaybook(entries);
+
+      // Find the maximum run_id to highlight new entries
+      const max = Math.max(...entries.map((e: PlaybookEntry) => e.run_id || 0));
+      setMaxRunId(max);
     } catch (error) {
       console.error('Error fetching playbook:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchHeuristicDetails = async (bullet_id: string, run_id: number, epoch_number: number) => {
+    if (heuristicDetails[bullet_id]) return; // Already fetched
+
+    try {
+      const response = await fetch(`/api/playbook/details?run_id=${run_id}&epoch_number=${epoch_number}`);
+      const data = await response.json();
+      setHeuristicDetails(prev => ({
+        ...prev,
+        [bullet_id]: data
+      }));
+    } catch (error) {
+      console.error('Error fetching heuristic details:', error);
+    }
+  };
+
+  const handleMouseEnter = (entry: PlaybookEntry) => {
+    setHoveredEntry(entry.bullet_id);
+    if (entry.run_id && entry.epoch_number) {
+      fetchHeuristicDetails(entry.bullet_id, entry.run_id, entry.epoch_number);
     }
   };
 
@@ -201,73 +242,139 @@ export default function PlaybookPage() {
                 {section.replace(/_/g, ' ')}
               </h2>
               <div className="space-y-3">
-                {entries.map((entry) => (
-                  <div
-                    key={entry.bullet_id}
-                    className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50"
-                  >
-                    {editingId === entry.bullet_id ? (
-                      <div className="space-y-2">
-                        <textarea
-                          value={editContent}
-                          onChange={(e) => setEditContent(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                          rows={2}
-                        />
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => handleSave(entry.bullet_id)}
-                            className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-                          >
-                            Save
-                          </button>
-                          <button
-                            onClick={() => setEditingId(null)}
-                            className="px-3 py-1 bg-gray-400 text-white text-sm rounded hover:bg-gray-500"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="text-gray-700">{entry.content}</p>
-                        <div className="mt-3 flex items-center justify-between">
-                          <div className="flex space-x-4 text-sm text-gray-500">
-                            <span>👍 {entry.helpful_count || 0}</span>
-                            <span>👎 {entry.harmful_count || 0}</span>
-                          </div>
+                {entries.map((entry) => {
+                  const isNew = entry.run_id === maxRunId && maxRunId > 0;
+                  const details = heuristicDetails[entry.bullet_id];
+
+                  return (
+                    <div
+                      key={entry.bullet_id}
+                      className={`relative border rounded-lg p-4 hover:bg-gray-50 transition-all ${
+                        isNew ? 'border-green-400 bg-green-50' : 'border-gray-200'
+                      }`}
+                      onMouseEnter={() => handleMouseEnter(entry)}
+                      onMouseLeave={() => setHoveredEntry(null)}
+                    >
+                      {editingId === entry.bullet_id ? (
+                        <div className="space-y-2">
+                          <textarea
+                            value={editContent}
+                            onChange={(e) => setEditContent(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                            rows={2}
+                          />
                           <div className="flex space-x-2">
                             <button
-                              onClick={() => handleVote(entry.bullet_id, 'helpful')}
-                              className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
+                              onClick={() => handleSave(entry.bullet_id)}
+                              className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
                             >
-                              Helpful
+                              Save
                             </button>
                             <button
-                              onClick={() => handleVote(entry.bullet_id, 'harmful')}
-                              className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                              onClick={() => setEditingId(null)}
+                              className="px-3 py-1 bg-gray-400 text-white text-sm rounded hover:bg-gray-500"
                             >
-                              Harmful
-                            </button>
-                            <button
-                              onClick={() => handleEdit(entry)}
-                              className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleDelete(entry.bullet_id)}
-                              className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-                            >
-                              Delete
+                              Cancel
                             </button>
                           </div>
                         </div>
-                      </>
-                    )}
-                  </div>
-                ))}
+                      ) : (
+                        <>
+                          {isNew && (
+                            <div className="absolute top-2 right-2">
+                              <span className="px-2 py-1 text-xs bg-green-600 text-white rounded-full">
+                                NEW
+                              </span>
+                            </div>
+                          )}
+                          <p className="text-gray-700 pr-16">{entry.content}</p>
+                          <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
+                            {entry.run_id && (
+                              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                                Run #{entry.run_id}
+                              </span>
+                            )}
+                            {entry.epoch_number && (
+                              <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">
+                                Epoch {entry.epoch_number}
+                              </span>
+                            )}
+                            {entry.last_updated && (
+                              <span>
+                                Updated: {new Date(entry.last_updated).toLocaleString()}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Tooltip on hover */}
+                          {hoveredEntry === entry.bullet_id && details && (
+                            <div className="absolute z-10 left-0 right-0 top-full mt-2 p-4 bg-white border border-gray-300 rounded-lg shadow-lg">
+                              <div className="space-y-3">
+                                {details.reflections && details.reflections.length > 0 && (
+                                  <div>
+                                    <h4 className="font-semibold text-sm text-gray-900 mb-2">
+                                      Reflector Output:
+                                    </h4>
+                                    {details.reflections.map((ref, idx) => (
+                                      <div key={idx} className="text-xs text-gray-700 mb-2 pl-2 border-l-2 border-blue-300">
+                                        <p><strong>Error:</strong> {ref.error_type}</p>
+                                        <p><strong>Approach:</strong> {ref.correct_approach}</p>
+                                        <p><strong>Insight:</strong> {ref.key_insight}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                {details.curatorOutput && (
+                                  <div>
+                                    <h4 className="font-semibold text-sm text-gray-900 mb-2">
+                                      Curator Output:
+                                    </h4>
+                                    <p className="text-xs text-gray-700 pl-2 border-l-2 border-green-300">
+                                      {details.curatorOutput}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="mt-3 flex items-center justify-between">
+                            <div className="flex space-x-4 text-sm text-gray-500">
+                              <span>👍 {entry.helpful_count || 0}</span>
+                              <span>👎 {entry.harmful_count || 0}</span>
+                            </div>
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => handleVote(entry.bullet_id, 'helpful')}
+                                className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
+                              >
+                                Helpful
+                              </button>
+                              <button
+                                onClick={() => handleVote(entry.bullet_id, 'harmful')}
+                                className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                              >
+                                Harmful
+                              </button>
+                              <button
+                                onClick={() => handleEdit(entry)}
+                                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDelete(entry.bullet_id)}
+                                className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}

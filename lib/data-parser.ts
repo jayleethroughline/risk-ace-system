@@ -81,9 +81,7 @@ export function parseCSV(csvContent: string): ParseResult {
   const data: TrainingDataRow[] = [];
 
   try {
-    console.log('[parseCSV] Starting CSV parse, content length:', csvContent.length);
     const lines = csvContent.split('\n').filter((line) => line.trim().length > 0);
-    console.log('[parseCSV] Total lines after filtering:', lines.length);
 
     if (lines.length === 0) {
       return { success: false, data: [], errors: ['CSV file is empty'] };
@@ -91,12 +89,10 @@ export function parseCSV(csvContent: string): ParseResult {
 
     // Check for header row and determine column mapping
     const firstLine = lines[0].toLowerCase();
-    console.log('[parseCSV] First line:', firstLine);
     const hasHeader =
       (firstLine.includes('text') || firstLine.includes('prompt')) &&
       (firstLine.includes('true_category') || firstLine.includes('category')) &&
       (firstLine.includes('true_risk') || firstLine.includes('risk_level') || firstLine.includes('risk'));
-    console.log('[parseCSV] Has header:', hasHeader);
 
     let textIndex = 0;
     let categoryIndex = 1;
@@ -106,16 +102,12 @@ export function parseCSV(csvContent: string): ParseResult {
     if (hasHeader) {
       // Parse header to get column indices
       const headers = firstLine.split(',').map((h) => h.trim());
-      console.log('[parseCSV] Headers found:', headers);
 
       textIndex = headers.findIndex((h) => h === 'text' || h === 'prompt');
       categoryIndex = headers.findIndex((h) => h === 'true_category' || h === 'category');
       riskIndex = headers.findIndex((h) => h === 'true_risk' || h === 'risk_level' || h === 'risk');
 
-      console.log('[parseCSV] Column indices - text:', textIndex, 'category:', categoryIndex, 'risk:', riskIndex);
-
       if (textIndex === -1 || categoryIndex === -1 || riskIndex === -1) {
-        console.log('[parseCSV] ERROR: Missing required columns');
         return {
           success: false,
           data: [],
@@ -132,19 +124,45 @@ export function parseCSV(csvContent: string): ParseResult {
       const line = lines[i].trim();
       if (!line) continue;
 
-      // Simple CSV parsing (handles quotes)
-      const matches = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+      // Proper CSV parsing that handles quoted fields with commas
+      const fields: string[] = [];
+      let currentField = '';
+      let inQuotes = false;
 
-      if (!matches || matches.length < 3) {
+      for (let j = 0; j < line.length; j++) {
+        const char = line[j];
+        const nextChar = line[j + 1];
+
+        if (char === '"') {
+          if (inQuotes && nextChar === '"') {
+            // Escaped quote
+            currentField += '"';
+            j++; // Skip next quote
+          } else {
+            // Toggle quote state
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          // End of field
+          fields.push(currentField.trim());
+          currentField = '';
+        } else {
+          currentField += char;
+        }
+      }
+      // Add the last field
+      fields.push(currentField.trim());
+
+      if (fields.length < 3) {
         errors.push(
-          `Row ${i + 1}: Invalid format. Expected 3 columns`
+          `Row ${i + 1}: Invalid format. Expected 3 columns, got ${fields.length}`
         );
         continue;
       }
 
-      const text = matches[textIndex]?.replace(/^"|"$/g, '').trim() || '';
-      const true_category = matches[categoryIndex]?.replace(/^"|"$/g, '').trim() || '';
-      const true_risk = matches[riskIndex]?.replace(/^"|"$/g, '').trim() || '';
+      const text = fields[textIndex] || '';
+      const true_category = fields[categoryIndex] || '';
+      const true_risk = fields[riskIndex] || '';
 
       const row: TrainingDataRow = {
         text,
@@ -154,17 +172,11 @@ export function parseCSV(csvContent: string): ParseResult {
 
       const validation = validateRow(row, i);
       if (!validation.valid) {
-        console.log('[parseCSV] Validation failed for row', i + 1, ':', validation.error);
         errors.push(validation.error!);
         continue;
       }
 
       data.push(row);
-    }
-
-    console.log('[parseCSV] Parse complete - data rows:', data.length, 'errors:', errors.length);
-    if (errors.length > 0) {
-      console.log('[parseCSV] First 5 errors:', errors.slice(0, 5));
     }
 
     if (data.length === 0 && errors.length > 0) {
@@ -177,7 +189,6 @@ export function parseCSV(csvContent: string): ParseResult {
       errors,
     };
   } catch (error) {
-    console.log('[parseCSV] Exception during parsing:', error);
     return {
       success: false,
       data: [],

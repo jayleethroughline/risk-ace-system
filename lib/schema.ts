@@ -6,6 +6,8 @@ export const playbook = pgTable('playbook', {
   content: text('content'),
   helpful_count: integer('helpful_count').default(0),
   harmful_count: integer('harmful_count').default(0),
+  run_id: integer('run_id'), // Track which run added this bullet
+  epoch_number: integer('epoch_number'), // Track which epoch added this bullet
   last_updated: timestamp('last_updated').defaultNow(),
 });
 
@@ -23,11 +25,16 @@ export const evalLog = pgTable('eval_log', {
 
 export const reflections = pgTable('reflections', {
   reflection_id: serial('reflection_id').primaryKey(),
+  run_id: integer('run_id'), // Track which run this reflection belongs to
+  epoch_number: integer('epoch_number'), // Track which epoch this reflection was created in
   error_type: text('error_type'),
   correct_approach: text('correct_approach'),
   key_insight: text('key_insight'),
   affected_section: text('affected_section'),
   tag: text('tag'),
+  input_text: text('input_text'), // The input that caused the error
+  predicted: text('predicted'), // What the model predicted
+  expected: text('expected'), // What was expected
   created_at: timestamp('created_at').defaultNow(),
 });
 
