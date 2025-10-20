@@ -186,14 +186,36 @@ Respond in JSON format:
 }`;
 
   const llmResponse = await callLLMWithJSON(prompt);
-  const parsed = JSON.parse(llmResponse.text);
 
-  const bullets = parsed.bullets && Array.isArray(parsed.bullets)
-    ? parsed.bullets.map((b: any) => ({
-        section: b.section || reflection.affected_section,
-        content: b.content || '',
-      }))
-    : [];
+  let parsed;
+  try {
+    parsed = JSON.parse(llmResponse.text);
+  } catch (parseError) {
+    console.error('❌ Curator JSON parse error:', parseError);
+    console.error('Raw LLM response:', llmResponse.text);
+    return { bullets: [], latency_ms: llmResponse.latency_ms };
+  }
+
+  if (!parsed.bullets) {
+    console.warn('⚠️  Curator returned no bullets field:', parsed);
+    return { bullets: [], latency_ms: llmResponse.latency_ms };
+  }
+
+  if (!Array.isArray(parsed.bullets)) {
+    console.warn('⚠️  Curator bullets is not an array:', parsed.bullets);
+    return { bullets: [], latency_ms: llmResponse.latency_ms };
+  }
+
+  const bullets = parsed.bullets.map((b: any) => ({
+    section: b.section || reflection.affected_section,
+    content: b.content || '',
+  })).filter(b => b.content.trim().length > 0);
+
+  if (bullets.length === 0) {
+    console.warn('⚠️  Curator generated empty bullets:', parsed.bullets);
+  } else {
+    console.log(`  ✓ Generated ${bullets.length} new heuristic(s)`);
+  }
 
   return {
     bullets,
@@ -408,9 +430,14 @@ export async function runTrainingEpoch(
 
     for (const reflection of reflectionResults) {
       try {
+        console.log(`  Processing reflection: ${reflection.error_type} (${reflection.tag})`);
         const { bullets, latency_ms } = await generateHeuristics(reflection, currentPlaybook);
 
         totalCuratorLatency += latency_ms;
+
+        if (bullets.length === 0) {
+          console.warn(`  ⚠️  No heuristics generated for reflection: ${reflection.error_type}`);
+        }
 
         for (const bullet of bullets) {
           const bullet_id = `${bullet.section}_${Date.now()}_${Math.random()
@@ -432,9 +459,11 @@ export async function runTrainingEpoch(
 
           newHeuristics.push(inserted);
           heuristicsAdded++;
+          console.log(`  ✓ Added heuristic to playbook: [${bullet.section}] ${bullet.content.substring(0, 60)}...`);
         }
       } catch (error) {
-        console.error('Error generating heuristics:', error);
+        console.error('❌ Error generating heuristics for reflection:', reflection.error_type);
+        console.error('Error details:', error);
         // Continue with next reflection
       }
     }

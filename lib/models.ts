@@ -66,8 +66,27 @@ export async function callLLMWithJSON(
 
     let text = response.text || '{}';
 
-    // Clean up markdown code blocks if present (fallback)
+    // Clean up markdown code blocks if present
     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+    // Try to extract JSON object or array from the text
+    // Look for the first { or [ and last } or ]
+    const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+    if (jsonMatch) {
+      text = jsonMatch[1].trim();
+    }
+
+    // Validate it's parseable JSON before returning
+    try {
+      JSON.parse(text);
+    } catch (parseError) {
+      console.error('❌ Failed to parse LLM JSON response');
+      console.error('Raw response:', response.text);
+      console.error('Cleaned text:', text);
+      console.error('Parse error:', parseError);
+      // Return empty object as fallback
+      text = '{}';
+    }
 
     const endTime = Date.now();
     const latency_ms = endTime - startTime;
