@@ -4,7 +4,7 @@ const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 export async function callLLM(
   prompt: string,
-  model: string = 'gemini-pro',
+  model: string = 'gemini-2.0-flash-exp',
   temperature: number = 0.7
 ): Promise<string> {
   try {
@@ -51,7 +51,7 @@ export async function callLLM(
 
 export async function callLLMWithJSON(
   prompt: string,
-  model: string = 'gemini-pro'
+  model: string = 'gemini-2.0-flash-exp'
 ): Promise<string> {
   try {
     const systemPrompt = 'You are a helpful assistant that responds only with valid JSON. Do not include any markdown formatting or code blocks, just the raw JSON.';

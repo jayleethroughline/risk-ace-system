@@ -6,101 +6,278 @@ import { playbook } from '../lib/schema';
 config({ path: '.env.local' });
 
 const seedData = [
+  // SUICIDE
   {
-    bullet_id: 'si-001',
-    section: 'suicidal_ideation',
-    content: 'Mentions of active intent, plan, or method to die indicate CRITICAL risk.',
+    bullet_id: 'suicide-001',
+    section: 'suicide',
+    content: 'Active plan, method, or imminent intent to end life = CRITICAL risk.',
     helpful_count: 0,
     harmful_count: 0,
   },
   {
-    bullet_id: 'si-002',
-    section: 'suicidal_ideation',
-    content: 'Expressions of wanting to die or disappear without a stated plan indicate HIGH risk.',
+    bullet_id: 'suicide-002',
+    section: 'suicide',
+    content: 'Expressing wish to die or not be alive without specific plan = HIGH risk.',
     helpful_count: 0,
     harmful_count: 0,
   },
   {
-    bullet_id: 'si-003',
-    section: 'suicidal_ideation',
-    content: 'Hopelessness or worthlessness with no mention of death implies MEDIUM risk.',
+    bullet_id: 'suicide-003',
+    section: 'suicide',
+    content: 'Passive suicidal ideation or hopelessness about future = MEDIUM risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+
+  // NSSI (Non-Suicidal Self-Injury)
+  {
+    bullet_id: 'nssi-001',
+    section: 'nssi',
+    content: 'Active self-harm behavior (cutting, burning, hitting) = HIGH risk.',
     helpful_count: 0,
     harmful_count: 0,
   },
   {
-    bullet_id: 'sh-001',
-    section: 'self_harm',
-    content: 'Statements about cutting, burning, or harming oneself without suicide intent indicate HIGH risk.',
+    bullet_id: 'nssi-002',
+    section: 'nssi',
+    content: 'Strong urges to self-harm with coping strategies in place = MEDIUM risk.',
     helpful_count: 0,
     harmful_count: 0,
   },
   {
-    bullet_id: 'sh-002',
-    section: 'self_harm',
-    content: 'Mentions of self-harm urges but strong protective reasons (friends, faith, goals) imply MEDIUM risk.',
+    bullet_id: 'nssi-003',
+    section: 'nssi',
+    content: 'History of self-harm but currently stable = LOW risk.',
     helpful_count: 0,
     harmful_count: 0,
   },
+
+  // CHILD_ABUSE
+  {
+    bullet_id: 'child-001',
+    section: 'child_abuse',
+    content: 'Physical, sexual, or severe emotional abuse of a child = CRITICAL risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+  {
+    bullet_id: 'child-002',
+    section: 'child_abuse',
+    content: 'Neglect or inadequate care of a child = HIGH risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+  {
+    bullet_id: 'child-003',
+    section: 'child_abuse',
+    content: 'Concerns about child welfare without immediate danger = MEDIUM risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+
+  // DOMESTIC_VIOLENCE
   {
     bullet_id: 'dv-001',
     section: 'domestic_violence',
-    content: 'Physical assault or threats from partner or household member = CRITICAL risk.',
+    content: 'Physical assault, strangulation, or weapon use by partner = CRITICAL risk.',
     helpful_count: 0,
     harmful_count: 0,
   },
   {
     bullet_id: 'dv-002',
     section: 'domestic_violence',
-    content: 'Emotional, verbal, or financial abuse in ongoing relationship = HIGH risk.',
+    content: 'Threats, intimidation, or controlling behavior by partner = HIGH risk.',
     helpful_count: 0,
     harmful_count: 0,
   },
   {
-    bullet_id: 'sa-001',
-    section: 'sexual_assault',
-    content: 'Recent or ongoing sexual violence = CRITICAL risk.',
+    bullet_id: 'dv-003',
+    section: 'domestic_violence',
+    content: 'Emotional or verbal abuse in relationship = MEDIUM risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+
+  // SEXUAL_VIOLENCE
+  {
+    bullet_id: 'sv-001',
+    section: 'sexual_violence',
+    content: 'Recent or ongoing sexual assault or abuse = CRITICAL risk.',
     helpful_count: 0,
     harmful_count: 0,
   },
   {
-    bullet_id: 'sa-002',
-    section: 'sexual_assault',
-    content: 'Past sexual assault disclosed without current danger = MEDIUM risk.',
+    bullet_id: 'sv-002',
+    section: 'sexual_violence',
+    content: 'Sexual coercion or harassment = HIGH risk.',
     helpful_count: 0,
     harmful_count: 0,
   },
   {
-    bullet_id: 'ca-001',
-    section: 'child_abuse',
-    content: 'Any mention of physical, sexual, or severe emotional abuse toward a child = CRITICAL risk.',
+    bullet_id: 'sv-003',
+    section: 'sexual_violence',
+    content: 'Past sexual trauma disclosure without current danger = MEDIUM risk.',
     helpful_count: 0,
     harmful_count: 0,
   },
+
+  // ELDER_ABUSE
   {
     bullet_id: 'ea-001',
     section: 'elder_abuse',
-    content: 'Neglect or exploitation of an older adult by caregiver or family = HIGH risk.',
+    content: 'Physical abuse or severe neglect of older adult = CRITICAL risk.',
     helpful_count: 0,
     harmful_count: 0,
   },
   {
-    bullet_id: 'mh-001',
-    section: 'mental_health_distress',
-    content: 'Severe anxiety, panic, or inability to function = HIGH risk.',
+    bullet_id: 'ea-002',
+    section: 'elder_abuse',
+    content: 'Financial exploitation or emotional abuse of elder = HIGH risk.',
     helpful_count: 0,
     harmful_count: 0,
   },
   {
-    bullet_id: 'mh-002',
-    section: 'mental_health_distress',
-    content: 'Mild sadness, stress, or loneliness = LOW risk.',
+    bullet_id: 'ea-003',
+    section: 'elder_abuse',
+    content: 'Concerns about elder care quality = MEDIUM risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+
+  // HOMICIDE
+  {
+    bullet_id: 'hom-001',
+    section: 'homicide',
+    content: 'Specific plan, means, and intent to harm or kill another person = CRITICAL risk.',
     helpful_count: 0,
     harmful_count: 0,
   },
   {
-    bullet_id: 'gen-001',
-    section: 'general_support',
-    content: 'Requests for information or general guidance with no harm indicators = NONE risk.',
+    bullet_id: 'hom-002',
+    section: 'homicide',
+    content: 'Threats to harm others or violent fantasies = HIGH risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+  {
+    bullet_id: 'hom-003',
+    section: 'homicide',
+    content: 'Anger toward others without violent intent = MEDIUM risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+
+  // PSYCHOSIS
+  {
+    bullet_id: 'psy-001',
+    section: 'psychosis',
+    content: 'Command hallucinations to harm self or others = CRITICAL risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+  {
+    bullet_id: 'psy-002',
+    section: 'psychosis',
+    content: 'Active hallucinations or delusions affecting safety = HIGH risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+  {
+    bullet_id: 'psy-003',
+    section: 'psychosis',
+    content: 'Psychotic symptoms managed with treatment = MEDIUM risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+
+  // MANIC_EPISODE
+  {
+    bullet_id: 'man-001',
+    section: 'manic_episode',
+    content: 'Severe mania with dangerous behavior (reckless spending, hypersexuality, aggression) = CRITICAL risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+  {
+    bullet_id: 'man-002',
+    section: 'manic_episode',
+    content: 'Elevated mood with impaired judgment and risky behavior = HIGH risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+  {
+    bullet_id: 'man-003',
+    section: 'manic_episode',
+    content: 'Hypomania with increased energy but maintained functioning = MEDIUM risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+
+  // EATING_DISORDER
+  {
+    bullet_id: 'ed-001',
+    section: 'eating_disorder',
+    content: 'Severe restriction, purging with medical complications = CRITICAL risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+  {
+    bullet_id: 'ed-002',
+    section: 'eating_disorder',
+    content: 'Active eating disorder behaviors affecting health = HIGH risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+  {
+    bullet_id: 'ed-003',
+    section: 'eating_disorder',
+    content: 'Body image concerns or disordered eating thoughts = MEDIUM risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+
+  // SUBSTANCE_ABUSE
+  {
+    bullet_id: 'sub-001',
+    section: 'substance_abuse',
+    content: 'Overdose risk, withdrawal complications, or acute intoxication = CRITICAL risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+  {
+    bullet_id: 'sub-002',
+    section: 'substance_abuse',
+    content: 'Active substance use affecting safety or functioning = HIGH risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+  {
+    bullet_id: 'sub-003',
+    section: 'substance_abuse',
+    content: 'Substance use concerns with maintained functioning = MEDIUM risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+
+  // OTHER_EMERGENCY
+  {
+    bullet_id: 'oth-001',
+    section: 'other_emergency',
+    content: 'Medical emergency or immediate safety threat not captured in other categories = CRITICAL risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+  {
+    bullet_id: 'oth-002',
+    section: 'other_emergency',
+    content: 'Urgent situation requiring immediate intervention = HIGH risk.',
+    helpful_count: 0,
+    harmful_count: 0,
+  },
+  {
+    bullet_id: 'oth-003',
+    section: 'other_emergency',
+    content: 'Concerning situation without immediate danger = MEDIUM risk.',
     helpful_count: 0,
     harmful_count: 0,
   },
@@ -108,15 +285,20 @@ const seedData = [
 
 async function seedPlaybook() {
   try {
-    console.log('🌱 Seeding playbook...');
+    console.log('🧹 Clearing existing playbook...');
+    await db.delete(playbook);
+    console.log('✓ Existing playbook cleared');
+
+    console.log('🌱 Seeding playbook with new categories...');
 
     for (const entry of seedData) {
-      await db.insert(playbook).values(entry).onConflictDoNothing();
+      await db.insert(playbook).values(entry);
       console.log(`✓ Inserted: ${entry.bullet_id} - ${entry.section}`);
     }
 
     console.log('✅ Playbook seeded successfully!');
     console.log(`📊 Total entries: ${seedData.length}`);
+    console.log('📋 Categories: suicide, nssi, child_abuse, domestic_violence, sexual_violence, elder_abuse, homicide, psychosis, manic_episode, eating_disorder, substance_abuse, other_emergency');
     process.exit(0);
   } catch (error) {
     console.error('❌ Error seeding playbook:', error);
