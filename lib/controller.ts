@@ -208,6 +208,8 @@ export async function runTrainingEpoch(
   config: TrainingConfig,
   epochNumber: number
 ): Promise<EpochStatus> {
+  console.log(`\n🔄 Starting Epoch ${epochNumber} for run_id ${config.run_id}`);
+
   try {
     // Update training run status
     await db
@@ -216,13 +218,17 @@ export async function runTrainingEpoch(
       .where(eq(trainingRun.run_id, config.run_id));
 
     // 1. Load eval dataset
+    console.log(`📊 Loading eval dataset...`);
     const evalDataset = await db
       .select()
       .from(trainingData)
       .where(eq(trainingData.run_id, config.run_id))
       .where(eq(trainingData.data_type, 'eval'));
 
+    console.log(`✓ Loaded ${evalDataset.length} eval samples`);
+
     if (evalDataset.length === 0) {
+      console.log(`❌ No evaluation data found`);
       return {
         epoch_number: epochNumber,
         status: 'failed',
@@ -231,12 +237,16 @@ export async function runTrainingEpoch(
     }
 
     // 2. Load current playbook
+    console.log(`📖 Loading playbook...`);
     const currentPlaybook = await db
       .select({ section: playbook.section, content: playbook.content })
       .from(playbook)
       .orderBy(desc(playbook.helpful_count));
 
+    console.log(`✓ Loaded ${currentPlaybook.length} playbook heuristics`);
+
     // 3. Run Generator on all eval samples
+    console.log(`🤖 Starting Generator: classifying ${evalDataset.length} samples...`);
     const predictions: Prediction[] = [];
     const errors: Array<{
       text: string;
@@ -247,7 +257,10 @@ export async function runTrainingEpoch(
     }> = [];
     let totalGeneratorLatency = 0;
 
-    for (const sample of evalDataset) {
+    for (let i = 0; i < evalDataset.length; i++) {
+      const sample = evalDataset[i];
+      console.log(`  Classifying sample ${i + 1}/${evalDataset.length}...`);
+
       try {
         const { category, risk_level, latency_ms } = await classifyText(
           sample.text || '',
@@ -255,6 +268,7 @@ export async function runTrainingEpoch(
         );
 
         totalGeneratorLatency += latency_ms;
+        console.log(`  ✓ Sample ${i + 1}: ${category}/${risk_level} (${latency_ms}ms)`);
 
         predictions.push({
           input_text: sample.text || '',
@@ -285,6 +299,8 @@ export async function runTrainingEpoch(
 
     const avgGeneratorLatency = predictions.length > 0 ? Math.round(totalGeneratorLatency / predictions.length) : 0;
 
+    console.log(`✅ Generator complete: ${predictions.length} predictions, ${errors.length} errors, avg ${avgGeneratorLatency}ms`);
+
     // Log Generator activity
     await db.insert(agentLog).values({
       run_id: config.run_id,
@@ -302,7 +318,9 @@ export async function runTrainingEpoch(
     });
 
     // 4. Calculate metrics
+    console.log(`📈 Calculating F1 metrics...`);
     const metrics = evaluatePredictions(predictions);
+    console.log(`✓ Metrics: F1=${metrics.overall_f1.toFixed(4)}, Acc=${metrics.accuracy.toFixed(4)}`);
 
     // 5. Save epoch results
     const [savedEpoch] = await db
@@ -321,6 +339,7 @@ export async function runTrainingEpoch(
       .returning();
 
     // 6. Run Reflector on errors (limit to top 10 to avoid overwhelming)
+    console.log(`🔍 Starting Reflector: analyzing ${Math.min(errors.length, 10)} errors...`);
     const reflectionResults = [];
     const errorsToAnalyze = errors.slice(0, 10);
     let totalReflectorLatency = 0;
@@ -357,6 +376,8 @@ export async function runTrainingEpoch(
 
     const avgReflectorLatency = reflectionResults.length > 0 ? Math.round(totalReflectorLatency / reflectionResults.length) : 0;
 
+    console.log(`✅ Reflector complete: ${reflectionResults.length} reflections, avg ${avgReflectorLatency}ms`);
+
     // Log Reflector activity
     if (reflectionResults.length > 0) {
       await db.insert(agentLog).values({
@@ -375,6 +396,7 @@ export async function runTrainingEpoch(
     }
 
     // 7. Run Curator to generate new heuristics
+    console.log(`📝 Starting Curator: generating heuristics from ${reflectionResults.length} reflections...`);
     let heuristicsAdded = 0;
     const newHeuristics = [];
     let totalCuratorLatency = 0;
@@ -420,6 +442,8 @@ export async function runTrainingEpoch(
 
     const avgCuratorLatency = reflectionResults.length > 0 ? Math.round(totalCuratorLatency / reflectionResults.length) : 0;
 
+    console.log(`✅ Curator complete: ${heuristicsAdded} heuristics added, avg ${avgCuratorLatency}ms`);
+
     // Log Curator activity
     if (heuristicsAdded > 0) {
       await db.insert(agentLog).values({
@@ -437,6 +461,8 @@ export async function runTrainingEpoch(
       });
     }
 
+    console.log(`\n✨ Epoch ${epochNumber} COMPLETE - F1: ${metrics.overall_f1.toFixed(4)}, Accuracy: ${metrics.accuracy.toFixed(4)}\n`);
+
     return {
       epoch_number: epochNumber,
       status: 'completed',
@@ -444,7 +470,7 @@ export async function runTrainingEpoch(
       message: `Epoch ${epochNumber} completed. F1: ${metrics.overall_f1.toFixed(4)}, Accuracy: ${metrics.accuracy.toFixed(4)}`,
     };
   } catch (error) {
-    console.error('Error in training epoch:', error);
+    console.error(`\n❌ Error in training epoch ${epochNumber}:`, error);
     return {
       epoch_number: epochNumber,
       status: 'failed',
@@ -457,6 +483,10 @@ export async function runTrainingEpoch(
  * Run complete training loop
  */
 export async function runTraining(runId: number): Promise<void> {
+  console.log(`\n🚀 =======================================`);
+  console.log(`🚀 STARTING TRAINING RUN ${runId}`);
+  console.log(`🚀 =======================================\n`);
+
   try {
     // Get training run configuration
     const [run] = await db
@@ -465,8 +495,11 @@ export async function runTraining(runId: number): Promise<void> {
       .where(eq(trainingRun.run_id, runId));
 
     if (!run) {
+      console.log(`❌ Training run ${runId} not found`);
       throw new Error(`Training run ${runId} not found`);
     }
+
+    console.log(`✓ Config: max_epochs=${run.max_epochs}, threshold=${run.plateau_threshold}, patience=${run.plateau_patience}`);
 
     const config: TrainingConfig = {
       run_id: runId,
