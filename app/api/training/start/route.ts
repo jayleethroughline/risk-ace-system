@@ -27,8 +27,11 @@ export async function POST(req: Request) {
     }
 
     // Parse training data
+    console.log('[API] Parsing training data, length:', training_data?.length);
     const trainingParsed = parseData(training_data);
+    console.log('[API] Training parse result:', { success: trainingParsed.success, dataLength: trainingParsed.data.length, errorCount: trainingParsed.errors.length });
     if (!trainingParsed.success || trainingParsed.data.length === 0) {
+      console.log('[API] Training data failed validation:', trainingParsed.errors);
       return NextResponse.json(
         {
           error: 'Invalid training data',
@@ -39,8 +42,11 @@ export async function POST(req: Request) {
     }
 
     // Parse eval data
+    console.log('[API] Parsing eval data, length:', eval_data?.length);
     const evalParsed = parseData(eval_data);
+    console.log('[API] Eval parse result:', { success: evalParsed.success, dataLength: evalParsed.data.length, errorCount: evalParsed.errors.length });
     if (!evalParsed.success || evalParsed.data.length === 0) {
+      console.log('[API] Eval data failed validation:', evalParsed.errors);
       return NextResponse.json(
         {
           error: 'Invalid evaluation data',
