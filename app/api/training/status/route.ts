@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { trainingRun, epochResult, trainingData } from '@/lib/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { detectPlateau } from '@/lib/plateau-detector';
 
 export async function GET(req: Request) {
@@ -42,14 +42,18 @@ export async function GET(req: Request) {
     const trainCount = await db
       .select()
       .from(trainingData)
-      .where(eq(trainingData.run_id, run_id))
-      .where(eq(trainingData.data_type, 'train'));
+      .where(and(
+        eq(trainingData.run_id, run_id),
+        eq(trainingData.data_type, 'train')
+      ));
 
     const evalCount = await db
       .select()
       .from(trainingData)
-      .where(eq(trainingData.run_id, run_id))
-      .where(eq(trainingData.data_type, 'eval'));
+      .where(and(
+        eq(trainingData.run_id, run_id),
+        eq(trainingData.data_type, 'eval')
+      ));
 
     // Calculate plateau status if we have epoch results
     let plateauStatus = null;
