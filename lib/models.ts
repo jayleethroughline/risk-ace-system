@@ -1,5 +1,7 @@
 // Using Google Gemini API with official SDK
 import { GoogleGenAI } from '@google/genai';
+import { LLM_CONFIG } from './config';
+import { logger } from './logger';
 
 // The client automatically picks up GEMINI_API_KEY from environment variables
 const ai = new GoogleGenAI({});
@@ -11,8 +13,8 @@ export interface LLMResponse {
 
 export async function callLLM(
   prompt: string,
-  model: string = 'gemini-2.5-flash',
-  temperature: number = 0.7
+  model: string = LLM_CONFIG.model,
+  temperature: number = LLM_CONFIG.temperature
 ): Promise<LLMResponse> {
   const startTime = Date.now();
 
@@ -26,7 +28,7 @@ export async function callLLM(
       contents: fullPrompt,
       config: {
         temperature,
-        maxOutputTokens: 8192,
+        maxOutputTokens: LLM_CONFIG.maxOutputTokens,
       },
     });
 
@@ -38,14 +40,14 @@ export async function callLLM(
       latency_ms,
     };
   } catch (error) {
-    console.error('Error calling LLM:', error);
+    logger.error('Error calling LLM', error);
     throw error;
   }
 }
 
 export async function callLLMWithJSON(
   prompt: string,
-  model: string = 'gemini-2.5-flash'
+  model: string = LLM_CONFIG.model
 ): Promise<LLMResponse> {
   const startTime = Date.now();
 
@@ -58,8 +60,8 @@ export async function callLLMWithJSON(
       model,
       contents: fullPrompt,
       config: {
-        temperature: 0.7,
-        maxOutputTokens: 8192,
+        temperature: LLM_CONFIG.temperature,
+        maxOutputTokens: LLM_CONFIG.maxOutputTokens,
         responseMimeType: 'application/json',
       },
     });
@@ -80,10 +82,9 @@ export async function callLLMWithJSON(
     try {
       JSON.parse(text);
     } catch (parseError) {
-      console.error('❌ Failed to parse LLM JSON response');
-      console.error('Raw response:', response.text);
-      console.error('Cleaned text:', text);
-      console.error('Parse error:', parseError);
+      logger.error('Failed to parse LLM JSON response');
+      logger.error('Raw response: ' + response.text);
+      logger.error('Cleaned text: ' + text, parseError);
       // Return empty object as fallback
       text = '{}';
     }
@@ -96,7 +97,7 @@ export async function callLLMWithJSON(
       latency_ms,
     };
   } catch (error) {
-    console.error('Error calling LLM with JSON:', error);
+    logger.error('Error calling LLM with JSON', error);
     throw error;
   }
 }

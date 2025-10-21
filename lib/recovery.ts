@@ -3,6 +3,8 @@
 import { db } from './db';
 import { trainingRun } from './schema';
 import { eq, and, lt, sql } from 'drizzle-orm';
+import { TIMEOUTS } from './config';
+import { logger } from './logger';
 
 /**
  * Detects and recovers stuck training runs on application startup.
@@ -16,7 +18,7 @@ export async function recoverStuckRuns(): Promise<{
   recovered: number;
   runs: Array<{ run_id: number; name: string | null }>;
 }> {
-  console.log('\n🔍 Checking for stuck training runs...');
+  logger.info('Checking for stuck training runs...');
 
   try {
     // Find all runs with status 'running'
@@ -31,31 +33,31 @@ export async function recoverStuckRuns(): Promise<{
       .where(eq(trainingRun.status, 'running'));
 
     if (runningRuns.length === 0) {
-      console.log('✓ No running training runs found');
+      logger.info('No running training runs found');
       return { recovered: 0, runs: [] };
     }
 
-    console.log(`Found ${runningRuns.length} run(s) with status 'running'`);
+    logger.info(`Found ${runningRuns.length} run(s) with status 'running'`);
 
     // Check each run for stale activity
     const staleRuns = [];
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const staleThreshold = new Date(Date.now() - TIMEOUTS.HEARTBEAT_STALE_MS);
 
     for (const run of runningRuns) {
       const lastActivity = run.last_activity_at || run.started_at;
 
       if (!lastActivity) {
         // No activity timestamp at all - definitely stuck
-        console.log(`  ⚠️  Run #${run.run_id} (${run.name}): No activity timestamp - marking as failed`);
+        logger.warn(`Run #${run.run_id} (${run.name}): No activity timestamp - marking as failed`);
         staleRuns.push(run);
-      } else if (lastActivity < fiveMinutesAgo) {
-        // Activity timestamp is older than 5 minutes
+      } else if (lastActivity < staleThreshold) {
+        // Activity timestamp is older than threshold
         const minutesSinceActivity = Math.round((Date.now() - lastActivity.getTime()) / 60000);
-        console.log(`  ⚠️  Run #${run.run_id} (${run.name}): Last activity ${minutesSinceActivity} minutes ago - marking as failed`);
+        logger.warn(`Run #${run.run_id} (${run.name}): Last activity ${minutesSinceActivity} minutes ago - marking as failed`);
         staleRuns.push(run);
       } else {
         // Recent activity - still actively running
-        console.log(`  ✓ Run #${run.run_id} (${run.name}): Active (last activity within 5 minutes)`);
+        logger.info(`Run #${run.run_id} (${run.name}): Active (last activity within threshold)`);
       }
     }
 
@@ -77,17 +79,17 @@ export async function recoverStuckRuns(): Promise<{
           .where(eq(trainingRun.run_id, run.run_id));
       }
 
-      console.log(`\n✅ Recovered ${staleRuns.length} stuck training run(s)\n`);
+      logger.success(`Recovered ${staleRuns.length} stuck training run(s)`);
       return {
         recovered: staleRuns.length,
         runs: staleRuns.map(r => ({ run_id: r.run_id, name: r.name })),
       };
     } else {
-      console.log('\n✓ All running training runs are active\n');
+      logger.info('All running training runs are active');
       return { recovered: 0, runs: [] };
     }
   } catch (error) {
-    console.error('❌ Error during stuck run recovery:', error);
+    logger.error('Error during stuck run recovery', error);
     // Don't throw - recovery should not block application startup
     return { recovered: 0, runs: [] };
   }
@@ -101,10 +103,10 @@ export async function checkRunTimeouts(): Promise<{
   timedOut: number;
   runs: Array<{ run_id: number; name: string | null }>;
 }> {
-  console.log('🕐 Checking for timed-out training runs...');
+  logger.info('Checking for timed-out training runs...');
 
   try {
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const timeoutThreshold = new Date(Date.now() - TIMEOUTS.RUN_TIMEOUT_MS);
 
     // Find running runs that started more than 24 hours ago
     const timedOutRuns = await db
@@ -117,12 +119,12 @@ export async function checkRunTimeouts(): Promise<{
       .where(
         and(
           eq(trainingRun.status, 'running'),
-          lt(trainingRun.started_at, twentyFourHoursAgo)
+          lt(trainingRun.started_at, timeoutThreshold)
         )
       );
 
     if (timedOutRuns.length === 0) {
-      console.log('✓ No timed-out runs found');
+      logger.info('No timed-out runs found');
       return { timedOut: 0, runs: [] };
     }
 
@@ -132,7 +134,7 @@ export async function checkRunTimeouts(): Promise<{
         ? Math.round((Date.now() - run.started_at.getTime()) / 3600000)
         : 0;
 
-      console.log(`  ⚠️  Run #${run.run_id} (${run.name}): Running for ${hoursSinceStart} hours - marking as failed`);
+      logger.warn(`Run #${run.run_id} (${run.name}): Running for ${hoursSinceStart} hours - marking as failed`);
 
       await db
         .update(trainingRun)
@@ -144,13 +146,13 @@ export async function checkRunTimeouts(): Promise<{
         .where(eq(trainingRun.run_id, run.run_id));
     }
 
-    console.log(`✅ Timed out ${timedOutRuns.length} training run(s)\n`);
+    logger.success(`Timed out ${timedOutRuns.length} training run(s)`);
     return {
       timedOut: timedOutRuns.length,
       runs: timedOutRuns.map(r => ({ run_id: r.run_id, name: r.name })),
     };
   } catch (error) {
-    console.error('❌ Error checking run timeouts:', error);
+    logger.error('Error checking run timeouts', error);
     return { timedOut: 0, runs: [] };
   }
 }

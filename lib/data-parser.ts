@@ -1,5 +1,7 @@
 // Data parsing utilities for training/eval dataset uploads
 
+import { VALID_CATEGORIES, VALID_RISKS, isValidCategory, isValidRisk } from './constants';
+
 export interface TrainingDataRow {
   text: string;
   true_category: string;
@@ -11,25 +13,6 @@ export interface ParseResult {
   data: TrainingDataRow[];
   errors: string[];
 }
-
-const VALID_CATEGORIES = [
-  'suicide',
-  'nssi',
-  'child_abuse',
-  'domestic_violence',
-  'domestic_abuse', // Alias for domestic_violence
-  'sexual_violence',
-  'elder_abuse',
-  'homicide',
-  'psychosis',
-  'manic_episode',
-  'eating_disorder',
-  'substance_abuse',
-  'other_emergency',
-  'none', // For non-crisis scenarios
-];
-
-const VALID_RISKS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'NONE'];
 
 /**
  * Validates a single data row
@@ -49,7 +32,7 @@ function validateRow(
     };
   }
 
-  if (!VALID_CATEGORIES.includes(row.true_category.toLowerCase())) {
+  if (!isValidCategory(row.true_category.toLowerCase())) {
     return {
       valid: false,
       error: `Row ${index + 1}: Invalid category "${row.true_category}". Must be one of: ${VALID_CATEGORIES.join(', ')}`,
@@ -60,7 +43,7 @@ function validateRow(
     return { valid: false, error: `Row ${index + 1}: Missing true_risk` };
   }
 
-  if (!VALID_RISKS.includes(row.true_risk.toUpperCase())) {
+  if (!isValidRisk(row.true_risk.toUpperCase())) {
     return {
       valid: false,
       error: `Row ${index + 1}: Invalid risk "${row.true_risk}". Must be one of: ${VALID_RISKS.join(', ')}`,
