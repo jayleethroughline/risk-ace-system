@@ -260,22 +260,14 @@ export default function MetricsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">ACE Framework Dashboard</h1>
-          <p className="mt-2 text-gray-600">
-            <span className="font-semibold">Agent Context Engineering (ACE):</span> An iterative learning system where the{' '}
-            <span className="text-blue-600 font-medium">Generator</span> classifies inputs using a playbook,{' '}
-            <span className="text-purple-600 font-medium">Reflector</span> analyzes errors to identify failure patterns, and{' '}
-            <span className="text-green-600 font-medium">Curator</span> generates new heuristics to improve the playbook.
-          </p>
-        </div>
-        <a
-          href="/train"
-          className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
-        >
-          Training Orchestration
-        </a>
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">ACE Framework Dashboard</h1>
+        <p className="mt-2 text-gray-600">
+          <span className="font-semibold">Agent Context Engineering (ACE):</span> An iterative learning system where the{' '}
+          <span className="text-blue-600 font-medium">Generator</span> classifies inputs using a playbook,{' '}
+          <span className="text-purple-600 font-medium">Reflector</span> analyzes errors to identify failure patterns, and{' '}
+          <span className="text-green-600 font-medium">Curator</span> generates new heuristics to improve the playbook.
+        </p>
       </div>
 
       {runs.length === 0 ? (
