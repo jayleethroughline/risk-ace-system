@@ -30,6 +30,12 @@ export default function Navigation() {
               Dashboard
             </Link>
             <Link
+              href="/how-it-works"
+              className={getLinkClass('/how-it-works')}
+            >
+              How ACE Works
+            </Link>
+            <Link
               href="/train"
               className={getLinkClass('/train')}
             >
