@@ -3,6 +3,8 @@ import { db } from '@/lib/db';
 import { reflections, playbook } from '@/lib/schema';
 import { sql } from 'drizzle-orm';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     // Check reflections with and without tracking
