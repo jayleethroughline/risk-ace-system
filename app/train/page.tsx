@@ -370,25 +370,31 @@ export default function TrainPage() {
                       {status.status}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium">Progress:</span>
-                    <span>
-                      Epoch {status.progress.current_epoch} / {status.progress.max_epochs}{' '}
-                      ({status.progress.progress_percent}%)
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2.5">
-                    <div
-                      className="bg-blue-600 h-2.5 rounded-full"
-                      style={{ width: `${status.progress.progress_percent}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium">Dataset:</span>
-                    <span>
-                      {status.dataset.training_samples} train, {status.dataset.eval_samples} eval
-                    </span>
-                  </div>
+                  {status.progress && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="font-medium">Progress:</span>
+                        <span>
+                          Epoch {status.progress.current_epoch} / {status.progress.max_epochs}{' '}
+                          ({status.progress.progress_percent}%)
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2.5">
+                        <div
+                          className="bg-blue-600 h-2.5 rounded-full"
+                          style={{ width: `${status.progress.progress_percent}%` }}
+                        />
+                      </div>
+                    </>
+                  )}
+                  {status.dataset && (
+                    <div className="flex justify-between">
+                      <span className="font-medium">Dataset:</span>
+                      <span>
+                        {status.dataset.training_samples} train, {status.dataset.eval_samples} eval
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -453,7 +459,7 @@ export default function TrainPage() {
             )}
 
             {/* Metrics Card */}
-            {status && status.epochs.length > 0 && (
+            {status && status.epochs && status.epochs.length > 0 && (
               <div className="bg-white rounded-lg shadow p-6">
                 <h2 className="text-xl font-semibold mb-4">Performance Metrics</h2>
                 <div className="space-y-4">
