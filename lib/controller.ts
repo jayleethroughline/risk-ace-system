@@ -9,7 +9,7 @@ import {
   playbook,
   reflections,
 } from './schema';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, sql } from 'drizzle-orm';
 import { callLLMWithJSON, callLLM } from './models';
 import {
   evaluatePredictions,
@@ -38,9 +38,9 @@ export interface EpochStatus {
  */
 async function classifyText(
   text: string,
-  playbookBullets: Array<{ section: string; content: string }>
-): Promise<{ category: string; risk_level: string; latency_ms: number }> {
-  const context = playbookBullets.map((b) => `[${b.section}] ${b.content}`).join('\n');
+  playbookBullets: Array<{ bullet_id: string; section: string; content: string }>
+): Promise<{ category: string; risk_level: string; heuristics_used: string[]; latency_ms: number }> {
+  const context = playbookBullets.map((b) => `[ID: ${b.bullet_id}] [${b.section}] ${b.content}`).join('\n');
 
   const prompt = `You are a risk classifier that assigns a category and risk level to user input.
 
@@ -70,7 +70,13 @@ ${context || 'No heuristics available yet.'}
 Text to classify: "${text}"
 
 Respond with ONLY valid JSON in this exact format:
-{"category":"<category>","risk_level":"<risk_level>"}`;
+{
+  "category": "<category>",
+  "risk_level": "<risk_level>",
+  "heuristics_used": ["<bullet_id_1>", "<bullet_id_2>"]
+}
+
+IMPORTANT: In the "heuristics_used" array, list the IDs of the specific heuristics from the playbook that influenced your decision. Include 1-3 most relevant heuristics.`;
 
   const llmResponse = await callLLMWithJSON(prompt);
   const parsed = JSON.parse(llmResponse.text);
@@ -78,6 +84,7 @@ Respond with ONLY valid JSON in this exact format:
   return {
     category: parsed.category?.toLowerCase() || 'other_emergency',
     risk_level: parsed.risk_level?.toUpperCase() || 'MEDIUM',
+    heuristics_used: Array.isArray(parsed.heuristics_used) ? parsed.heuristics_used : [],
     latency_ms: llmResponse.latency_ms,
   };
 }
@@ -263,14 +270,18 @@ export async function runTrainingEpoch(
     // 2. Load current playbook
     console.log(`📖 Loading playbook...`);
     const playbookRaw = await db
-      .select({ section: playbook.section, content: playbook.content })
+      .select({
+        bullet_id: playbook.bullet_id,
+        section: playbook.section,
+        content: playbook.content
+      })
       .from(playbook)
       .orderBy(desc(playbook.helpful_count));
 
     // Filter out null values and type-cast
-    const currentPlaybook: Array<{ section: string; content: string }> = playbookRaw
-      .filter((b): b is { section: string; content: string } =>
-        b.section !== null && b.content !== null
+    const currentPlaybook: Array<{ bullet_id: string; section: string; content: string }> = playbookRaw
+      .filter((b): b is { bullet_id: string; section: string; content: string } =>
+        b.bullet_id !== null && b.section !== null && b.content !== null
       );
 
     console.log(`✓ Loaded ${currentPlaybook.length} playbook heuristics`);
@@ -285,6 +296,9 @@ export async function runTrainingEpoch(
       true_category: string;
       true_risk: string;
     }> = [];
+
+    // Track heuristics usage: { bullet_id: { helpful: count, harmful: count } }
+    const heuristicsTracking: Record<string, { helpful: number; harmful: number }> = {};
     let totalGeneratorLatency = 0;
 
     for (let i = 0; i < evalDataset.length; i++) {
@@ -292,7 +306,7 @@ export async function runTrainingEpoch(
       console.log(`  Classifying sample ${i + 1}/${evalDataset.length}...`);
 
       try {
-        const { category, risk_level, latency_ms } = await classifyText(
+        const { category, risk_level, heuristics_used, latency_ms } = await classifyText(
           sample.text || '',
           currentPlaybook
         );
@@ -308,11 +322,25 @@ export async function runTrainingEpoch(
           true_risk: sample.true_risk || '',
         });
 
+        // Determine if prediction was correct
+        const isCorrect =
+          category === sample.true_category &&
+          risk_level === sample.true_risk;
+
+        // Track heuristics effectiveness
+        for (const heuristicId of heuristics_used) {
+          if (!heuristicsTracking[heuristicId]) {
+            heuristicsTracking[heuristicId] = { helpful: 0, harmful: 0 };
+          }
+          if (isCorrect) {
+            heuristicsTracking[heuristicId].helpful++;
+          } else {
+            heuristicsTracking[heuristicId].harmful++;
+          }
+        }
+
         // Track errors for reflection
-        if (
-          category !== sample.true_category ||
-          risk_level !== sample.true_risk
-        ) {
+        if (!isCorrect) {
           errors.push({
             text: sample.text || '',
             predicted_category: category,
@@ -346,6 +374,23 @@ export async function runTrainingEpoch(
         avg_latency_ms: avgGeneratorLatency,
       },
     });
+
+    // Update heuristic effectiveness counts in database
+    console.log(`📊 Updating heuristic effectiveness counts...`);
+    const heuristicsUpdated = Object.keys(heuristicsTracking).length;
+    for (const [bulletId, counts] of Object.entries(heuristicsTracking)) {
+      try {
+        await db.execute(
+          sql`UPDATE playbook
+              SET helpful_count = helpful_count + ${counts.helpful},
+                  harmful_count = harmful_count + ${counts.harmful}
+              WHERE bullet_id = ${bulletId}`
+        );
+      } catch (error) {
+        console.error(`  ❌ Failed to update counts for ${bulletId}:`, error);
+      }
+    }
+    console.log(`✓ Updated effectiveness counts for ${heuristicsUpdated} heuristics`);
 
     // 4. Calculate metrics
     console.log(`📈 Calculating F1 metrics...`);
