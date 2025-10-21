@@ -671,8 +671,18 @@ export default function MetricsPage() {
                                                     {heuristic.section}
                                                   </span>
                                                   <div className="flex gap-2 text-xs text-gray-600">
-                                                    <span>👍 {heuristic.helpful_count}</span>
-                                                    <span>👎 {heuristic.harmful_count}</span>
+                                                    <span
+                                                      className="cursor-help"
+                                                      title="Helpful: Number of times this heuristic was cited during Generator classification that resulted in a CORRECT prediction. The Generator cites which heuristics it uses for each classification, and we track whether those led to correct or incorrect results."
+                                                    >
+                                                      👍 {heuristic.helpful_count}
+                                                    </span>
+                                                    <span
+                                                      className="cursor-help"
+                                                      title="Harmful: Number of times this heuristic was cited during Generator classification that resulted in an INCORRECT prediction. This helps identify heuristics that may be misleading or need refinement."
+                                                    >
+                                                      👎 {heuristic.harmful_count}
+                                                    </span>
                                                   </div>
                                                 </div>
                                                 <div className="text-sm text-gray-700">
