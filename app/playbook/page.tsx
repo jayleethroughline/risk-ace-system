@@ -13,25 +13,21 @@ interface PlaybookEntry {
   last_updated: Date | null;
 }
 
-interface HeuristicDetails {
-  reflections: Array<{
-    error_type: string;
-    correct_approach: string;
-    key_insight: string;
-  }>;
-  curatorOutput: string;
+// Extract risk level from content
+function extractRiskLevel(content: string | null): string {
+  if (!content) return 'UNKNOWN';
+  const upper = content.toUpperCase();
+  if (upper.includes('= CRITICAL')) return 'CRITICAL';
+  if (upper.includes('= HIGH')) return 'HIGH';
+  if (upper.includes('= MEDIUM')) return 'MEDIUM';
+  if (upper.includes('= LOW')) return 'LOW';
+  return 'OTHER';
 }
 
 export default function PlaybookPage() {
   const [playbook, setPlaybook] = useState<PlaybookEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editContent, setEditContent] = useState('');
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newSection, setNewSection] = useState('');
-  const [newContent, setNewContent] = useState('');
-  const [hoveredEntry, setHoveredEntry] = useState<string | null>(null);
-  const [heuristicDetails, setHeuristicDetails] = useState<Record<string, HeuristicDetails>>({});
+  const [selectedCell, setSelectedCell] = useState<{ category: string; risk: string } | null>(null);
   const [maxRunId, setMaxRunId] = useState<number>(0);
 
   useEffect(() => {
@@ -45,7 +41,6 @@ export default function PlaybookPage() {
       const entries = data.playbook || [];
       setPlaybook(entries);
 
-      // Find the maximum run_id to highlight new entries
       const max = Math.max(...entries.map((e: PlaybookEntry) => e.run_id || 0));
       setMaxRunId(max);
     } catch (error) {
@@ -55,113 +50,80 @@ export default function PlaybookPage() {
     }
   };
 
-  const fetchHeuristicDetails = async (bullet_id: string, run_id: number, epoch_number: number) => {
-    if (heuristicDetails[bullet_id]) return; // Already fetched
+  // Get the most recent update timestamp
+  const getLastUpdated = () => {
+    if (playbook.length === 0) return null;
+    const dates = playbook
+      .map(e => e.last_updated)
+      .filter(d => d != null)
+      .map(d => new Date(d!));
+    if (dates.length === 0) return null;
+    return new Date(Math.max(...dates.map(d => d.getTime())));
+  };
 
-    try {
-      const response = await fetch(`/api/playbook/details?run_id=${run_id}&epoch_number=${epoch_number}`);
-      const data = await response.json();
-      setHeuristicDetails(prev => ({
-        ...prev,
-        [bullet_id]: data
-      }));
-    } catch (error) {
-      console.error('Error fetching heuristic details:', error);
+  const lastUpdated = getLastUpdated();
+
+  // Organize playbook as matrix: categories x risk levels
+  const categories = [
+    { key: 'suicide', label: 'Suicide' },
+    { key: 'nssi', label: 'NSSI' },
+    { key: 'child_abuse', label: 'Child Abuse' },
+    { key: 'domestic_violence', label: 'Domestic Violence' },
+    { key: 'sexual_violence', label: 'Sexual Violence' },
+    { key: 'elder_abuse', label: 'Elder Abuse' },
+    { key: 'homicide', label: 'Homicide' },
+    { key: 'psychosis', label: 'Psychosis' },
+    { key: 'manic_episode', label: 'Manic Episode' },
+    { key: 'eating_disorder', label: 'Eating Disorder' },
+    { key: 'substance_abuse', label: 'Substance Abuse' },
+    { key: 'other_emergency', label: 'Other Emergency' },
+  ];
+
+  const riskLevels = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+
+  // Group all entries by category and risk level
+  const entriesByCell: Record<string, Record<string, PlaybookEntry[]>> = {};
+  categories.forEach(cat => {
+    entriesByCell[cat.key] = {};
+    riskLevels.forEach(level => {
+      entriesByCell[cat.key][level] = [];
+    });
+  });
+
+  playbook.forEach(entry => {
+    const section = entry.section || 'other_emergency';
+    const riskLevel = extractRiskLevel(entry.content);
+    if (entriesByCell[section] && riskLevel !== 'UNKNOWN' && riskLevel !== 'OTHER') {
+      entriesByCell[section][riskLevel].push(entry);
     }
-  };
+  });
 
-  const handleMouseEnter = (entry: PlaybookEntry) => {
-    setHoveredEntry(entry.bullet_id);
-    if (entry.run_id && entry.epoch_number) {
-      fetchHeuristicDetails(entry.bullet_id, entry.run_id, entry.epoch_number);
-    }
-  };
+  // Sort entries within each cell by run_id/epoch_number (baseline first, then by run/epoch)
+  Object.keys(entriesByCell).forEach(category => {
+    Object.keys(entriesByCell[category]).forEach(risk => {
+      entriesByCell[category][risk].sort((a, b) => {
+        // Baseline (run_id = null) comes first
+        if (a.run_id === null && b.run_id !== null) return -1;
+        if (a.run_id !== null && b.run_id === null) return 1;
+        if (a.run_id === null && b.run_id === null) return 0;
 
-  const handleEdit = (entry: PlaybookEntry) => {
-    setEditingId(entry.bullet_id);
-    setEditContent(entry.content || '');
-  };
-
-  const handleSave = async (bullet_id: string) => {
-    try {
-      await fetch('/api/playbook', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bullet_id, content: editContent }),
+        // Sort by run_id, then epoch_number
+        if (a.run_id !== b.run_id) return (a.run_id || 0) - (b.run_id || 0);
+        return (a.epoch_number || 0) - (b.epoch_number || 0);
       });
-      setEditingId(null);
-      fetchPlaybook();
-    } catch (error) {
-      console.error('Error updating entry:', error);
-      alert('Failed to update entry');
-    }
+    });
+  });
+
+  // Get the most recent entry for display in the matrix
+  const getLatestEntry = (category: string, risk: string): PlaybookEntry | null => {
+    const entries = entriesByCell[category]?.[risk] || [];
+    return entries.length > 0 ? entries[entries.length - 1] : null;
   };
 
-  const handleDelete = async (bullet_id: string) => {
-    if (!confirm('Are you sure you want to delete this entry?')) return;
-
-    try {
-      await fetch(`/api/playbook?bullet_id=${bullet_id}`, {
-        method: 'DELETE',
-      });
-      fetchPlaybook();
-    } catch (error) {
-      console.error('Error deleting entry:', error);
-      alert('Failed to delete entry');
-    }
+  // Get all revisions for a cell
+  const getRevisions = (category: string, risk: string): PlaybookEntry[] => {
+    return entriesByCell[category]?.[risk] || [];
   };
-
-  const handleAdd = async () => {
-    if (!newSection.trim() || !newContent.trim()) {
-      alert('Please fill in both section and content');
-      return;
-    }
-
-    try {
-      await fetch('/api/playbook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ section: newSection, content: newContent }),
-      });
-      setNewSection('');
-      setNewContent('');
-      setShowAddForm(false);
-      fetchPlaybook();
-    } catch (error) {
-      console.error('Error adding entry:', error);
-      alert('Failed to add entry');
-    }
-  };
-
-  const handleVote = async (bullet_id: string, type: 'helpful' | 'harmful') => {
-    const entry = playbook.find((e) => e.bullet_id === bullet_id);
-    if (!entry) return;
-
-    const updates: any = { bullet_id };
-    if (type === 'helpful') {
-      updates.helpful_count = (entry.helpful_count || 0) + 1;
-    } else {
-      updates.harmful_count = (entry.harmful_count || 0) + 1;
-    }
-
-    try {
-      await fetch('/api/playbook', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-      fetchPlaybook();
-    } catch (error) {
-      console.error('Error voting:', error);
-    }
-  };
-
-  const groupedPlaybook = playbook.reduce((acc, entry) => {
-    const section = entry.section || 'uncategorized';
-    if (!acc[section]) acc[section] = [];
-    acc[section].push(entry);
-    return acc;
-  }, {} as Record<string, PlaybookEntry[]>);
 
   if (loading) {
     return (
@@ -172,212 +134,193 @@ export default function PlaybookPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Classification Playbook
-          </h1>
-          <p className="mt-2 text-gray-600">
-            Heuristics and rules for risk classification
-          </p>
+          <div className="flex items-baseline gap-3">
+            <h1 className="text-2xl font-bold text-gray-900">Classification Playbook</h1>
+            {lastUpdated && (
+              <span className="text-xs text-gray-500">
+                Last updated: {lastUpdated.toLocaleString()}
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-gray-600">Category × Risk Level Matrix (Click cells to view revision history)</p>
         </div>
-        <button
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-        >
-          {showAddForm ? 'Cancel' : 'Add Entry'}
-        </button>
       </div>
 
-      {showAddForm && (
-        <div className="bg-white shadow rounded-lg p-6">
-          <h3 className="text-lg font-semibold mb-4">Add New Entry</h3>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Section
-              </label>
-              <input
-                type="text"
-                value={newSection}
-                onChange={(e) => setNewSection(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                placeholder="e.g., suicidal_ideation"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Content
-              </label>
-              <textarea
-                value={newContent}
-                onChange={(e) => setNewContent(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                rows={3}
-                placeholder="Enter heuristic..."
-              />
-            </div>
-            <button
-              onClick={handleAdd}
-              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-            >
-              Add Entry
-            </button>
-          </div>
+      {playbook.length === 0 ? (
+        <div className="bg-white shadow rounded-lg p-12 text-center">
+          <p className="text-gray-500">No playbook entries yet.</p>
+        </div>
+      ) : (
+        <div className="bg-white shadow rounded-lg overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="bg-gray-100 border-b">
+                <th className="text-left p-2 font-semibold text-gray-700 sticky left-0 bg-gray-100 z-10 min-w-[140px]">
+                  Category
+                </th>
+                {riskLevels.map(level => (
+                  <th key={level} className="text-center p-2 font-semibold text-gray-700 min-w-[250px]">
+                    {level}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {categories.map(category => (
+                <tr key={category.key} className="border-b hover:bg-gray-50">
+                  <td className="p-2 font-medium text-gray-900 sticky left-0 bg-white border-r">
+                    {category.label}
+                  </td>
+                  {riskLevels.map(level => {
+                    const latestEntry = getLatestEntry(category.key, level);
+                    const revisions = getRevisions(category.key, level);
+
+                    if (!latestEntry) {
+                      return (
+                        <td key={level} className="p-2 text-center text-gray-400">
+                          —
+                        </td>
+                      );
+                    }
+
+                    const isNew = latestEntry.run_id === maxRunId && maxRunId > 0;
+                    const hasMultipleRevisions = revisions.length > 1;
+
+                    return (
+                      <td
+                        key={level}
+                        className={`p-2 relative cursor-pointer hover:bg-blue-50 ${
+                          isNew ? 'bg-green-50' : ''
+                        }`}
+                        onClick={() => setSelectedCell({ category: category.key, risk: level })}
+                        title="Click to view revision history"
+                      >
+                        {isNew && (
+                          <span className="absolute top-1 right-1 px-1 py-0.5 text-[10px] bg-green-600 text-white rounded">
+                            NEW
+                          </span>
+                        )}
+                        {hasMultipleRevisions && (
+                          <span className="absolute top-1 left-1 px-1 py-0.5 text-[10px] bg-blue-600 text-white rounded">
+                            {revisions.length} versions
+                          </span>
+                        )}
+                        <div className="text-xs text-gray-700 leading-tight mt-4">
+                          {latestEntry.content?.replace(/\s*=\s*(CRITICAL|HIGH|MEDIUM|LOW)\s*risk\.?$/i, '')}
+                        </div>
+                        <div className="mt-1 flex items-center gap-1 text-[10px] text-gray-500">
+                          {latestEntry.run_id ? (
+                            <>
+                              <span className="px-1 py-0.5 bg-blue-100 text-blue-700 rounded">
+                                R{latestEntry.run_id}
+                              </span>
+                              {latestEntry.epoch_number && (
+                                <span className="px-1 py-0.5 bg-purple-100 text-purple-700 rounded">
+                                  E{latestEntry.epoch_number}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-gray-500">Baseline</span>
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {Object.keys(groupedPlaybook).length === 0 ? (
-        <div className="bg-white shadow rounded-lg p-12 text-center">
-          <p className="text-gray-500 text-lg">
-            No playbook entries yet. Run the ACE cycle to generate heuristics.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {Object.entries(groupedPlaybook).map(([section, entries]) => (
-            <div key={section} className="bg-white shadow rounded-lg p-6">
-              <h2 className="text-xl font-semibold mb-4 text-gray-800 capitalize">
-                {section.replace(/_/g, ' ')}
-              </h2>
-              <div className="space-y-3">
-                {entries.map((entry) => {
-                  const isNew = entry.run_id === maxRunId && maxRunId > 0;
-                  const details = heuristicDetails[entry.bullet_id];
+      {/* Revision History Modal */}
+      {selectedCell && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => setSelectedCell(null)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-auto m-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  {categories.find(c => c.key === selectedCell.category)?.label} - {selectedCell.risk} Risk
+                </h2>
+                <p className="text-sm text-gray-600">Revision History</p>
+              </div>
+              <button
+                onClick={() => setSelectedCell(null)}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
 
-                  return (
-                    <div
-                      key={entry.bullet_id}
-                      className={`relative border rounded-lg p-4 hover:bg-gray-50 transition-all ${
-                        isNew ? 'border-green-400 bg-green-50' : 'border-gray-200'
-                      }`}
-                      onMouseEnter={() => handleMouseEnter(entry)}
-                      onMouseLeave={() => setHoveredEntry(null)}
-                    >
-                      {editingId === entry.bullet_id ? (
-                        <div className="space-y-2">
-                          <textarea
-                            value={editContent}
-                            onChange={(e) => setEditContent(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                            rows={2}
-                          />
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => handleSave(entry.bullet_id)}
-                              className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={() => setEditingId(null)}
-                              className="px-3 py-1 bg-gray-400 text-white text-sm rounded hover:bg-gray-500"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          {isNew && (
-                            <div className="absolute top-2 right-2">
-                              <span className="px-2 py-1 text-xs bg-green-600 text-white rounded-full">
-                                NEW
-                              </span>
-                            </div>
-                          )}
-                          <p className="text-gray-700 pr-16">{entry.content}</p>
-                          <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
-                            {entry.run_id && (
-                              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
-                                Run #{entry.run_id}
-                              </span>
-                            )}
+            <div className="p-6">
+              {getRevisions(selectedCell.category, selectedCell.risk).map((entry, index) => {
+                const isBaseline = entry.run_id === null;
+                const isLatest = index === getRevisions(selectedCell.category, selectedCell.risk).length - 1;
+
+                return (
+                  <div
+                    key={entry.bullet_id}
+                    className={`mb-4 p-4 rounded-lg border-2 ${
+                      isLatest ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        {isBaseline ? (
+                          <span className="px-2 py-1 bg-gray-600 text-white text-xs rounded font-semibold">
+                            Baseline
+                          </span>
+                        ) : (
+                          <>
+                            <span className="px-2 py-1 bg-blue-600 text-white text-xs rounded font-semibold">
+                              Run #{entry.run_id}
+                            </span>
                             {entry.epoch_number && (
-                              <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">
+                              <span className="px-2 py-1 bg-purple-600 text-white text-xs rounded font-semibold">
                                 Epoch {entry.epoch_number}
                               </span>
                             )}
-                            {entry.last_updated && (
-                              <span>
-                                Updated: {new Date(entry.last_updated).toLocaleString()}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Tooltip on hover */}
-                          {hoveredEntry === entry.bullet_id && details && (
-                            <div className="absolute z-10 left-0 right-0 top-full mt-2 p-4 bg-white border border-gray-300 rounded-lg shadow-lg">
-                              <div className="space-y-3">
-                                {details.reflections && details.reflections.length > 0 && (
-                                  <div>
-                                    <h4 className="font-semibold text-sm text-gray-900 mb-2">
-                                      Reflector Output:
-                                    </h4>
-                                    {details.reflections.map((ref, idx) => (
-                                      <div key={idx} className="text-xs text-gray-700 mb-2 pl-2 border-l-2 border-blue-300">
-                                        <p><strong>Error:</strong> {ref.error_type}</p>
-                                        <p><strong>Approach:</strong> {ref.correct_approach}</p>
-                                        <p><strong>Insight:</strong> {ref.key_insight}</p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                {details.curatorOutput && (
-                                  <div>
-                                    <h4 className="font-semibold text-sm text-gray-900 mb-2">
-                                      Curator Output:
-                                    </h4>
-                                    <p className="text-xs text-gray-700 pl-2 border-l-2 border-green-300">
-                                      {details.curatorOutput}
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                          <div className="mt-3 flex items-center justify-between">
-                            <div className="flex space-x-4 text-sm text-gray-500">
-                              <span>👍 {entry.helpful_count || 0}</span>
-                              <span>👎 {entry.harmful_count || 0}</span>
-                            </div>
-                            <div className="flex space-x-2">
-                              <button
-                                onClick={() => handleVote(entry.bullet_id, 'helpful')}
-                                className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
-                              >
-                                Helpful
-                              </button>
-                              <button
-                                onClick={() => handleVote(entry.bullet_id, 'harmful')}
-                                className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
-                              >
-                                Harmful
-                              </button>
-                              <button
-                                onClick={() => handleEdit(entry)}
-                                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => handleDelete(entry.bullet_id)}
-                                className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </div>
-                        </>
-                      )}
+                          </>
+                        )}
+                        {isLatest && (
+                          <span className="px-2 py-1 bg-green-600 text-white text-xs rounded font-semibold">
+                            Latest
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {entry.last_updated ? new Date(entry.last_updated).toLocaleString() : 'N/A'}
+                      </div>
                     </div>
-                  );
-                })}
-              </div>
+
+                    <div className="mb-2">
+                      <div className="text-xs text-gray-600 font-semibold mb-1">Bullet ID:</div>
+                      <div className="text-xs text-gray-800 font-mono bg-white px-2 py-1 rounded">
+                        {entry.bullet_id}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-gray-600 font-semibold mb-1">Content:</div>
+                      <div className="text-sm text-gray-800 bg-white px-3 py-2 rounded leading-relaxed">
+                        {entry.content}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          ))}
+          </div>
         </div>
       )}
     </div>

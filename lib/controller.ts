@@ -360,10 +360,10 @@ export async function runTrainingEpoch(
       })
       .returning();
 
-    // 6. Run Reflector on errors (limit to top 10 to avoid overwhelming)
-    console.log(`🔍 Starting Reflector: analyzing ${Math.min(errors.length, 10)} errors...`);
+    // 6. Run Reflector on all errors (comprehensive analysis per ACE paper)
+    console.log(`🔍 Starting Reflector: analyzing ${errors.length} errors...`);
     const reflectionResults = [];
-    const errorsToAnalyze = errors.slice(0, 10);
+    const errorsToAnalyze = errors;
     let totalReflectorLatency = 0;
 
     for (const error of errorsToAnalyze) {
@@ -439,27 +439,39 @@ export async function runTrainingEpoch(
           console.warn(`  ⚠️  No heuristics generated for reflection: ${reflection.error_type}`);
         }
 
-        for (const bullet of bullets) {
-          const bullet_id = `${bullet.section}_${Date.now()}_${Math.random()
-            .toString(36)
-            .substr(2, 9)}`;
+        for (let i = 0; i < bullets.length; i++) {
+          const bullet = bullets[i];
 
-          const [inserted] = await db
-            .insert(playbook)
-            .values({
-              bullet_id,
-              section: bullet.section,
-              content: bullet.content,
-              helpful_count: 0,
-              harmful_count: 0,
-              run_id: config.run_id,
-              epoch_number: epochNumber,
-            })
-            .returning();
+          // Extract risk level from bullet content
+          const riskMatch = bullet.content.match(/=\s*(CRITICAL|HIGH|MEDIUM|LOW)\s*risk/i);
+          const riskLevel = riskMatch ? riskMatch[1].toLowerCase() : 'medium';
 
-          newHeuristics.push(inserted);
-          heuristicsAdded++;
-          console.log(`  ✓ Added heuristic to playbook: [${bullet.section}] ${bullet.content.substring(0, 60)}...`);
+          // Generate bullet_id in format: category-risk-r#-e#-index
+          // Adding index to handle multiple heuristics with same risk level in same epoch
+          const bullet_id = `${bullet.section}-${riskLevel}-r${config.run_id}-e${epochNumber}-${i + 1}`;
+
+          try {
+            const [inserted] = await db
+              .insert(playbook)
+              .values({
+                bullet_id,
+                section: bullet.section,
+                content: bullet.content,
+                helpful_count: 0,
+                harmful_count: 0,
+                run_id: config.run_id,
+                epoch_number: epochNumber,
+              })
+              .returning();
+
+            newHeuristics.push(inserted);
+            heuristicsAdded++;
+            console.log(`  ✓ Added heuristic to playbook: [${bullet.section}] ${bullet.content.substring(0, 60)}...`);
+          } catch (insertError) {
+            console.error(`  ❌ Failed to insert heuristic: ${bullet_id}`);
+            console.error(`  Error:`, insertError);
+            // Continue with next bullet
+          }
         }
       } catch (error) {
         console.error('❌ Error generating heuristics for reflection:', reflection.error_type);

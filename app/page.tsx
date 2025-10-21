@@ -59,14 +59,28 @@ interface Heuristic {
   last_updated: string;
 }
 
+interface AgentLog {
+  log_id: number;
+  epoch_number: number;
+  agent_type: string;
+  system_prompt: string;
+  input_summary: string;
+  output_summary: string;
+  timestamp: string;
+  details: any;
+}
+
 export default function MetricsPage() {
   const [runs, setRuns] = useState<TrainingRunSummary[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
+  const [expandedRunId, setExpandedRunId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [reflections, setReflections] = useState<Reflection[]>([]);
   const [heuristics, setHeuristics] = useState<Heuristic[]>([]);
   const [expandedEpochs, setExpandedEpochs] = useState<Set<number>>(new Set());
   const [stoppingRunId, setStoppingRunId] = useState<number | null>(null);
+  const [agentLogs, setAgentLogs] = useState<AgentLog[]>([]);
+  const [selectedLog, setSelectedLog] = useState<AgentLog | null>(null);
 
   useEffect(() => {
     fetchAllRuns();
@@ -102,6 +116,7 @@ export default function MetricsPage() {
 
       if (latestRun) {
         setSelectedRunId(latestRun.run_id);
+        // Don't auto-expand - let user click to expand
       }
     } catch (error) {
       console.error('Error fetching runs:', error);
@@ -112,16 +127,19 @@ export default function MetricsPage() {
 
   const fetchAgentWork = async (runId: number) => {
     try {
-      const [reflectionsRes, heuristicsRes] = await Promise.all([
+      const [reflectionsRes, heuristicsRes, logsRes] = await Promise.all([
         fetch(`/api/training/reflections?run_id=${runId}`),
-        fetch(`/api/training/heuristics?run_id=${runId}`)
+        fetch(`/api/training/heuristics?run_id=${runId}`),
+        fetch(`/api/training/logs?run_id=${runId}`)
       ]);
 
       const reflectionsData = await reflectionsRes.json();
       const heuristicsData = await heuristicsRes.json();
+      const logsData = await logsRes.json();
 
       setReflections(reflectionsData);
       setHeuristics(heuristicsData);
+      setAgentLogs(logsData.logs || []);
     } catch (error) {
       console.error('Error fetching agent work:', error);
     }
@@ -261,13 +279,28 @@ export default function MetricsPage() {
                   {runs.map((run) => (
                     <tr
                       key={run.run_id}
-                      onClick={() => setSelectedRunId(run.run_id)}
+                      onClick={() => {
+                        setSelectedRunId(run.run_id);
+                        // Toggle expand/collapse when clicking the same run
+                        if (expandedRunId === run.run_id) {
+                          setExpandedRunId(null);
+                        } else {
+                          setExpandedRunId(run.run_id);
+                        }
+                      }}
                       className={`cursor-pointer hover:bg-gray-50 ${
                         selectedRunId === run.run_id ? 'bg-blue-50' : ''
                       }`}
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        #{run.run_id}
+                        <div className="flex items-center gap-2">
+                          <span className={`transform transition-transform duration-200 ${
+                            expandedRunId === run.run_id ? 'rotate-90' : ''
+                          }`}>
+                            ▶
+                          </span>
+                          #{run.run_id}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {run.name}
@@ -312,8 +345,8 @@ export default function MetricsPage() {
           </div>
 
           {/* Selected Run Details */}
-          {selectedRun && (
-            <>
+          {selectedRun && expandedRunId === selectedRunId && (
+            <div className="space-y-6 animate-in slide-in-from-top duration-300">
               {/* Epoch History */}
               {selectedRun.epochs.length > 0 && (
                 <div className="bg-white rounded-lg shadow p-6">
@@ -323,19 +356,54 @@ export default function MetricsPage() {
                       <thead className="bg-gray-50">
                         <tr>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Epoch
+                            <span className="flex items-center gap-1">
+                              Epoch
+                              <span className="text-blue-600 normal-case text-[10px] font-normal">(click for details)</span>
+                            </span>
                           </th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Overall F1
+                            <span className="flex items-center gap-1">
+                              Overall F1
+                              <span
+                                className="text-gray-400 cursor-help"
+                                title="Harmonic mean of precision and recall across both category and risk level predictions. This is the primary metric measuring how well the system balances correct predictions with minimizing false positives and false negatives."
+                              >
+                                ⓘ
+                              </span>
+                            </span>
                           </th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Category F1
+                            <span className="flex items-center gap-1">
+                              Category F1
+                              <span
+                                className="text-gray-400 cursor-help"
+                                title="F1 score for predicting the correct category (e.g., suicide, NSSI, domestic violence). Measures how accurately the system identifies the type of crisis regardless of risk level."
+                              >
+                                ⓘ
+                              </span>
+                            </span>
                           </th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Risk F1
+                            <span className="flex items-center gap-1">
+                              Risk F1
+                              <span
+                                className="text-gray-400 cursor-help"
+                                title="F1 score for predicting the correct risk level (CRITICAL, HIGH, MEDIUM, LOW). Measures how accurately the system assesses urgency regardless of category."
+                              >
+                                ⓘ
+                              </span>
+                            </span>
                           </th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Accuracy
+                            <span className="flex items-center gap-1">
+                              Accuracy
+                              <span
+                                className="text-gray-400 cursor-help"
+                                title="Percentage of samples where both category and risk level were predicted correctly. This is the strictest metric - only exact matches count as correct."
+                              >
+                                ⓘ
+                              </span>
+                            </span>
                           </th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Playbook Size
@@ -350,16 +418,27 @@ export default function MetricsPage() {
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                         {selectedRun.epochs.map((epoch) => (
-                          <tr key={epoch.epoch_number} className={
-                            selectedRun.best_epoch?.epoch_number === epoch.epoch_number
-                              ? 'bg-yellow-50'
-                              : ''
-                          }>
+                          <tr
+                            key={epoch.epoch_number}
+                            className={`cursor-pointer hover:bg-gray-100 transition-colors ${
+                              selectedRun.best_epoch?.epoch_number === epoch.epoch_number
+                                ? 'bg-yellow-50'
+                                : ''
+                            }`}
+                            onClick={() => {
+                              // Find any log from this epoch to trigger the modal
+                              const epochLog = agentLogs.find(log => log.epoch_number === epoch.epoch_number);
+                              if (epochLog) setSelectedLog(epochLog);
+                            }}
+                            title="Click to view Agent Cycle Details"
+                          >
                             <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                              {epoch.epoch_number}
-                              {selectedRun.best_epoch?.epoch_number === epoch.epoch_number && (
-                                <span className="ml-2 text-xs text-yellow-600">★ Best</span>
-                              )}
+                              <div className="flex items-center gap-2">
+                                <span>{epoch.epoch_number}</span>
+                                {selectedRun.best_epoch?.epoch_number === epoch.epoch_number && (
+                                  <span className="text-xs text-yellow-600">★ Best</span>
+                                )}
+                              </div>
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-blue-600">
                               {(epoch.overall_f1 * 100).toFixed(1)}%
@@ -387,55 +466,81 @@ export default function MetricsPage() {
                       </tbody>
                     </table>
                   </div>
-                </div>
-              )}
 
-              {/* Learning Progress Chart (text-based visualization) */}
-              {selectedRun.epochs.length > 1 && (
-                <div className="bg-white rounded-lg shadow p-6">
-                  <h3 className="text-lg font-semibold mb-4">Learning Progress</h3>
-                  <div className="space-y-3">
-                    <div>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="text-gray-600">Overall F1 Score</span>
-                        <span className="font-semibold text-blue-600">
-                          {(selectedRun.epochs[selectedRun.epochs.length - 1].overall_f1 * 100).toFixed(1)}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3">
-                        <div
-                          className="bg-blue-600 h-3 rounded-full transition-all duration-300"
-                          style={{
-                            width: `${selectedRun.epochs[selectedRun.epochs.length - 1].overall_f1 * 100}%`
-                          }}
-                        />
+                  {/* Best Epoch Improvement Summary */}
+                  {selectedRun.best_epoch && selectedRun.epochs.length > 1 && (
+                    <div className="mt-4 p-4 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border border-green-200">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                        📈 Best Epoch Performance (Epoch {selectedRun.best_epoch.epoch_number}) vs Initial (Epoch 1)
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                          <div className="text-xs text-gray-600 mb-1">Overall F1</div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-bold text-blue-600">
+                              {(selectedRun.best_epoch.overall_f1 * 100).toFixed(1)}%
+                            </span>
+                            <span className={`text-xs font-semibold ${
+                              (selectedRun.best_epoch.overall_f1 - selectedRun.epochs[0].overall_f1) >= 0
+                                ? 'text-green-600'
+                                : 'text-red-600'
+                            }`}>
+                              {(selectedRun.best_epoch.overall_f1 - selectedRun.epochs[0].overall_f1) >= 0 ? '↑' : '↓'}
+                              {Math.abs((selectedRun.best_epoch.overall_f1 - selectedRun.epochs[0].overall_f1) * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-600 mb-1">Category F1</div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-bold text-purple-600">
+                              {(selectedRun.best_epoch.category_f1 * 100).toFixed(1)}%
+                            </span>
+                            <span className={`text-xs font-semibold ${
+                              (selectedRun.best_epoch.category_f1 - selectedRun.epochs[0].category_f1) >= 0
+                                ? 'text-green-600'
+                                : 'text-red-600'
+                            }`}>
+                              {(selectedRun.best_epoch.category_f1 - selectedRun.epochs[0].category_f1) >= 0 ? '↑' : '↓'}
+                              {Math.abs((selectedRun.best_epoch.category_f1 - selectedRun.epochs[0].category_f1) * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-600 mb-1">Risk F1</div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-bold text-orange-600">
+                              {(selectedRun.best_epoch.risk_f1 * 100).toFixed(1)}%
+                            </span>
+                            <span className={`text-xs font-semibold ${
+                              (selectedRun.best_epoch.risk_f1 - selectedRun.epochs[0].risk_f1) >= 0
+                                ? 'text-green-600'
+                                : 'text-red-600'
+                            }`}>
+                              {(selectedRun.best_epoch.risk_f1 - selectedRun.epochs[0].risk_f1) >= 0 ? '↑' : '↓'}
+                              {Math.abs((selectedRun.best_epoch.risk_f1 - selectedRun.epochs[0].risk_f1) * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-gray-600 mb-1">Accuracy</div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-bold text-green-600">
+                              {(selectedRun.best_epoch.accuracy * 100).toFixed(1)}%
+                            </span>
+                            <span className={`text-xs font-semibold ${
+                              (selectedRun.best_epoch.accuracy - selectedRun.epochs[0].accuracy) >= 0
+                                ? 'text-green-600'
+                                : 'text-red-600'
+                            }`}>
+                              {(selectedRun.best_epoch.accuracy - selectedRun.epochs[0].accuracy) >= 0 ? '↑' : '↓'}
+                              {Math.abs((selectedRun.best_epoch.accuracy - selectedRun.epochs[0].accuracy) * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="text-gray-600">Accuracy</span>
-                        <span className="font-semibold text-orange-600">
-                          {(selectedRun.epochs[selectedRun.epochs.length - 1].accuracy * 100).toFixed(1)}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-3">
-                        <div
-                          className="bg-orange-600 h-3 rounded-full transition-all duration-300"
-                          style={{
-                            width: `${selectedRun.epochs[selectedRun.epochs.length - 1].accuracy * 100}%`
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <div className="text-sm text-gray-600 mt-4">
-                      <span className="font-medium">Improvement:</span> From {(selectedRun.epochs[0].overall_f1 * 100).toFixed(1)}% (Epoch 1)
-                      to {(selectedRun.epochs[selectedRun.epochs.length - 1].overall_f1 * 100).toFixed(1)}% (Epoch {selectedRun.epochs.length})
-                      {' '}
-                      <span className="text-green-600 font-semibold">
-                        (+{((selectedRun.epochs[selectedRun.epochs.length - 1].overall_f1 - selectedRun.epochs[0].overall_f1) * 100).toFixed(1)}%)
-                      </span>
-                    </div>
-                  </div>
+                  )}
                 </div>
               )}
 
@@ -475,103 +580,117 @@ export default function MetricsPage() {
                           </button>
 
                           {isExpanded && (
-                            <div className="p-4 space-y-4">
-                              {/* Reflections Section */}
-                              {epochReflections.length > 0 && (
+                            <div className="p-4">
+                              {/* Side by Side: Reflections and Heuristics */}
+                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                {/* Reflections Section */}
                                 <div>
-                                  <h4 className="font-semibold text-purple-700 mb-2 flex items-center gap-2">
-                                    <span className="text-lg">🔍</span>
-                                    Reflector Analysis ({epochReflections.length})
-                                  </h4>
-                                  <div className="space-y-3">
-                                    {epochReflections.map((reflection) => (
-                                      <div key={reflection.reflection_id} className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                                        <div className="flex items-start gap-3">
-                                          <div className="flex-1 space-y-2">
-                                            <div className="flex items-center gap-2">
-                                              <span className="px-2 py-1 bg-purple-200 text-purple-800 text-xs font-semibold rounded">
-                                                {reflection.error_type}
-                                              </span>
-                                              {reflection.tag && (
-                                                <span className="px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded">
-                                                  {reflection.tag}
-                                                </span>
-                                              )}
+                                  {epochReflections.length > 0 ? (
+                                    <>
+                                      <h4 className="font-semibold text-purple-700 mb-2 flex items-center gap-2">
+                                        <span className="text-lg">🔍</span>
+                                        Reflector Analysis ({epochReflections.length})
+                                      </h4>
+                                      <div className="space-y-3">
+                                        {epochReflections.map((reflection) => {
+                                          return (
+                                            <div
+                                              key={reflection.reflection_id}
+                                              className="bg-purple-50 border border-purple-200 rounded-lg p-3"
+                                            >
+                                              <div className="flex items-start gap-3">
+                                                <div className="flex-1 space-y-2">
+                                                  <div className="flex items-center gap-2">
+                                                    <span className="px-2 py-1 bg-purple-200 text-purple-800 text-xs font-semibold rounded">
+                                                      {reflection.error_type}
+                                                    </span>
+                                                    {reflection.tag && (
+                                                      <span className="px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded">
+                                                        {reflection.tag}
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                  <div className="text-sm">
+                                                    <div className="text-gray-600 mb-1">
+                                                      <span className="font-medium">Input:</span> {reflection.input_text}
+                                                    </div>
+                                                    <div className="flex gap-4 text-xs">
+                                                      <div>
+                                                        <span className="text-red-600 font-medium">Predicted:</span> {reflection.predicted}
+                                                      </div>
+                                                      <div>
+                                                        <span className="text-green-600 font-medium">Expected:</span> {reflection.expected}
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                  <div className="text-sm space-y-1">
+                                                    <div>
+                                                      <span className="font-medium text-gray-700">Key Insight:</span>{' '}
+                                                      <span className="text-gray-600">{reflection.key_insight}</span>
+                                                    </div>
+                                                    <div>
+                                                      <span className="font-medium text-gray-700">Correct Approach:</span>{' '}
+                                                      <span className="text-gray-600">{reflection.correct_approach}</span>
+                                                    </div>
+                                                    {reflection.affected_section && (
+                                                      <div>
+                                                        <span className="font-medium text-gray-700">Affected Section:</span>{' '}
+                                                        <span className="text-gray-600">{reflection.affected_section}</span>
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              </div>
                                             </div>
-                                            <div className="text-sm">
-                                              <div className="text-gray-600 mb-1">
-                                                <span className="font-medium">Input:</span> {reflection.input_text}
-                                              </div>
-                                              <div className="flex gap-4 text-xs">
-                                                <div>
-                                                  <span className="text-red-600 font-medium">Predicted:</span> {reflection.predicted}
+                                          );
+                                        })}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="text-sm text-gray-500 italic">
+                                      No reflections recorded for this epoch
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Heuristics Section */}
+                                <div>
+                                  {epochHeuristics.length > 0 ? (
+                                    <>
+                                      <h4 className="font-semibold text-green-700 mb-2 flex items-center gap-2">
+                                        <span className="text-lg">📝</span>
+                                        Curator Heuristics ({epochHeuristics.length})
+                                      </h4>
+                                      <div className="space-y-2">
+                                        {epochHeuristics.map((heuristic) => (
+                                          <div key={heuristic.bullet_id} className="bg-green-50 border border-green-200 rounded-lg p-3">
+                                            <div className="flex items-start gap-3">
+                                              <div className="flex-1">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                  <span className="px-2 py-1 bg-green-200 text-green-800 text-xs font-semibold rounded">
+                                                    {heuristic.section}
+                                                  </span>
+                                                  <div className="flex gap-2 text-xs text-gray-600">
+                                                    <span>👍 {heuristic.helpful_count}</span>
+                                                    <span>👎 {heuristic.harmful_count}</span>
+                                                  </div>
                                                 </div>
-                                                <div>
-                                                  <span className="text-green-600 font-medium">Expected:</span> {reflection.expected}
+                                                <div className="text-sm text-gray-700">
+                                                  {heuristic.content}
                                                 </div>
                                               </div>
-                                            </div>
-                                            <div className="text-sm space-y-1">
-                                              <div>
-                                                <span className="font-medium text-gray-700">Key Insight:</span>{' '}
-                                                <span className="text-gray-600">{reflection.key_insight}</span>
-                                              </div>
-                                              <div>
-                                                <span className="font-medium text-gray-700">Correct Approach:</span>{' '}
-                                                <span className="text-gray-600">{reflection.correct_approach}</span>
-                                              </div>
-                                              {reflection.affected_section && (
-                                                <div>
-                                                  <span className="font-medium text-gray-700">Affected Section:</span>{' '}
-                                                  <span className="text-gray-600">{reflection.affected_section}</span>
-                                                </div>
-                                              )}
                                             </div>
                                           </div>
-                                        </div>
+                                        ))}
                                       </div>
-                                    ))}
-                                  </div>
+                                    </>
+                                  ) : (
+                                    <div className="text-sm text-gray-500 italic">
+                                      No heuristics added for this epoch
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-
-                              {/* Heuristics Section */}
-                              {epochHeuristics.length > 0 && (
-                                <div>
-                                  <h4 className="font-semibold text-green-700 mb-2 flex items-center gap-2">
-                                    <span className="text-lg">📝</span>
-                                    Curator Heuristics ({epochHeuristics.length})
-                                  </h4>
-                                  <div className="space-y-2">
-                                    {epochHeuristics.map((heuristic) => (
-                                      <div key={heuristic.bullet_id} className="bg-green-50 border border-green-200 rounded-lg p-3">
-                                        <div className="flex items-start gap-3">
-                                          <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-2">
-                                              <span className="px-2 py-1 bg-green-200 text-green-800 text-xs font-semibold rounded">
-                                                {heuristic.section}
-                                              </span>
-                                              <div className="flex gap-2 text-xs text-gray-600">
-                                                <span>👍 {heuristic.helpful_count}</span>
-                                                <span>👎 {heuristic.harmful_count}</span>
-                                              </div>
-                                            </div>
-                                            <div className="text-sm text-gray-700">
-                                              {heuristic.content}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              {epochReflections.length === 0 && epochHeuristics.length === 0 && (
-                                <div className="text-sm text-gray-500 italic">
-                                  No reflections or heuristics recorded for this epoch
-                                </div>
-                              )}
+                              </div>
                             </div>
                           )}
                         </div>
@@ -580,9 +699,240 @@ export default function MetricsPage() {
                   </div>
                 </div>
               )}
-            </>
+            </div>
           )}
         </>
+      )}
+
+      {/* JSON Viewer Modal */}
+      {selectedLog && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => setSelectedLog(null)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="bg-gray-100 px-6 py-4 border-b flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold">
+                  Agent Cycle Details - Epoch {selectedLog.epoch_number}
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Generator → Reflector → Curator Pipeline
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedLog(null)}
+                className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-auto p-6">
+              <div className="space-y-6">
+                {/* Generator Section */}
+                {(() => {
+                  const generatorLog = agentLogs.find(
+                    log => log.agent_type === 'generator' && log.epoch_number === selectedLog.epoch_number
+                  );
+                  return generatorLog ? (
+                    <div className="border border-blue-200 rounded-lg overflow-hidden">
+                      <div className="bg-blue-100 px-4 py-2 border-b border-blue-200">
+                        <h4 className="font-semibold text-blue-900 flex items-center gap-2">
+                          <span className="text-lg">🤖</span>
+                          Generator - Classifies samples using current playbook
+                        </h4>
+                      </div>
+                      <div className="p-4 space-y-3">
+                        <div>
+                          <h5 className="text-xs font-semibold text-gray-700 mb-1">System Prompt</h5>
+                          <div className="bg-gray-50 rounded p-2 text-xs text-gray-800 whitespace-pre-wrap font-mono max-h-64 overflow-auto">
+{`You are a risk classifier that assigns a category and risk level to user input.
+
+CATEGORIES:
+- suicide
+- nssi
+- child_abuse
+- domestic_violence
+- sexual_violence
+- elder_abuse
+- homicide
+- psychosis
+- manic_episode
+- eating_disorder
+- substance_abuse
+- other_emergency
+
+RISK LEVELS:
+- CRITICAL
+- HIGH
+- MEDIUM
+- LOW
+
+Use the following heuristics to guide your classification:
+\${context || 'No heuristics available yet.'}
+
+Text to classify: "\${text}"
+
+Respond with ONLY valid JSON in this exact format:
+{"category":"<category>","risk_level":"<risk_level>"}`}
+                          </div>
+                        </div>
+                        <div>
+                          <h5 className="text-xs font-semibold text-gray-700 mb-1">Complete Output</h5>
+                          <div className="bg-gray-900 rounded p-3 overflow-x-auto max-h-96">
+                            <pre className="text-xs text-green-400 font-mono">
+                              {JSON.stringify(generatorLog.details, null, 2)}
+                            </pre>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-500 italic">Generator log not found for this epoch</div>
+                  );
+                })()}
+
+                {/* Reflector Section */}
+                {(() => {
+                  const reflectorLog = agentLogs.find(
+                    log => log.agent_type === 'reflector' && log.epoch_number === selectedLog.epoch_number
+                  );
+                  return reflectorLog ? (
+                    <div className="border border-orange-200 rounded-lg overflow-hidden">
+                      <div className="bg-orange-100 px-4 py-2 border-b border-orange-200">
+                        <h4 className="font-semibold text-orange-900 flex items-center gap-2">
+                          <span className="text-lg">🔍</span>
+                          Reflector - Analyzes classification errors
+                        </h4>
+                      </div>
+                      <div className="p-4 space-y-3">
+                        <div>
+                          <h5 className="text-xs font-semibold text-gray-700 mb-1">System Prompt</h5>
+                          <div className="bg-gray-50 rounded p-2 text-xs text-gray-800 whitespace-pre-wrap font-mono max-h-64 overflow-auto">
+{`You are a reflective agent analyzing classification errors.
+
+INPUT TEXT: "\${text}"
+
+PREDICTED:
+- Category: \${predictedCategory}
+- Risk Level: \${predictedRisk}
+
+ACTUAL (TRUE):
+- Category: \${trueCategory}
+- Risk Level: \${trueRisk}
+
+Analyze this error and provide:
+1. What type of error occurred (e.g., "category misclassification", "risk underestimation", "risk overestimation")
+2. What the correct approach should be
+3. A key insight that could help prevent similar errors
+4. Which section of the playbook this affects (use the true category)
+5. A short tag for this insight (e.g., "indirect_language", "context_clues")
+
+Respond in this exact JSON format:
+{
+  "error_type": "<error type>",
+  "correct_approach": "<correct approach>",
+  "key_insight": "<key insight>",
+  "affected_section": "<section>",
+  "tag": "<tag>"
+}`}
+                          </div>
+                        </div>
+                        <div>
+                          <h5 className="text-xs font-semibold text-gray-700 mb-1">Complete Output</h5>
+                          <div className="bg-gray-900 rounded p-3 overflow-x-auto max-h-96">
+                            <pre className="text-xs text-green-400 font-mono">
+                              {JSON.stringify(reflectorLog.details, null, 2)}
+                            </pre>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-500 italic">Reflector log not found for this epoch</div>
+                  );
+                })()}
+
+                {/* Curator Section */}
+                {(() => {
+                  const curatorLog = agentLogs.find(
+                    log => log.agent_type === 'curator' && log.epoch_number === selectedLog.epoch_number
+                  );
+                  return curatorLog ? (
+                    <div className="border border-green-200 rounded-lg overflow-hidden">
+                      <div className="bg-green-100 px-4 py-2 border-b border-green-200">
+                        <h4 className="font-semibold text-green-900 flex items-center gap-2">
+                          <span className="text-lg">📝</span>
+                          Curator - Generates new heuristics for playbook
+                        </h4>
+                      </div>
+                      <div className="p-4 space-y-3">
+                        <div>
+                          <h5 className="text-xs font-semibold text-gray-700 mb-1">System Prompt</h5>
+                          <div className="bg-gray-50 rounded p-2 text-xs text-gray-800 whitespace-pre-wrap font-mono max-h-64 overflow-auto">
+{`You are a curator that maintains a playbook of classification heuristics.
+
+CURRENT PLAYBOOK:
+\${playbookContext || 'Empty playbook'}
+
+NEW REFLECTION:
+- Error Type: \${reflection.error_type}
+- Correct Approach: \${reflection.correct_approach}
+- Key Insight: \${reflection.key_insight}
+- Affected Section: \${reflection.affected_section}
+- Tag: \${reflection.tag}
+
+Based on this reflection, generate 1-2 NEW heuristic bullets that should be added to the playbook.
+Each bullet should be:
+- Actionable and specific
+- Clear and concise
+- Directly applicable to classification
+
+Respond in JSON format:
+{
+  "bullets": [
+    {
+      "section": "<section name>",
+      "content": "<heuristic bullet point>"
+    }
+  ]
+}`}
+                          </div>
+                        </div>
+                        <div>
+                          <h5 className="text-xs font-semibold text-gray-700 mb-1">Complete Output</h5>
+                          <div className="bg-gray-900 rounded p-3 overflow-x-auto max-h-96">
+                            <pre className="text-xs text-green-400 font-mono">
+                              {JSON.stringify(curatorLog.details, null, 2)}
+                            </pre>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-gray-500 italic">Curator log not found for this epoch</div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-gray-100 px-6 py-3 border-t flex justify-end">
+              <button
+                onClick={() => setSelectedLog(null)}
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

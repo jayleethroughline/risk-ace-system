@@ -41,6 +41,12 @@ export default function Navigation() {
             >
               Playbook
             </Link>
+            <Link
+              href="/database"
+              className={getLinkClass('/database')}
+            >
+              Database
+            </Link>
           </div>
           <div className="flex items-center">
             <span className="text-xl font-bold text-blue-600">

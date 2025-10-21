@@ -26,7 +26,7 @@ export async function callLLM(
       contents: fullPrompt,
       config: {
         temperature,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 8192,
       },
     });
 
@@ -59,7 +59,7 @@ export async function callLLMWithJSON(
       contents: fullPrompt,
       config: {
         temperature: 0.7,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 8192,
         responseMimeType: 'application/json',
       },
     });
