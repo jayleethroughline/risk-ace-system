@@ -1,65 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-
-interface TrainingStatus {
-  run_id: number;
-  name: string;
-  status: string;
-  started_at: string | null;
-  completed_at: string | null;
-  config: {
-    max_epochs: number;
-    plateau_threshold: number;
-    plateau_patience: number;
-  };
-  dataset: {
-    training_samples: number;
-    eval_samples: number;
-  };
-  progress: {
-    current_epoch: number;
-    max_epochs: number;
-    progress_percent: number;
-  };
-  epochs: Array<{
-    epoch_number: number;
-    overall_f1: number;
-    category_f1: number;
-    risk_f1: number;
-    accuracy: number;
-    playbook_size: number;
-    errors_found: number;
-    heuristics_added: number;
-  }>;
-  best_epoch: {
-    epoch_number: number;
-    overall_f1: number;
-    category_f1: number;
-    risk_f1: number;
-    accuracy: number;
-  } | null;
-  plateau_status: {
-    should_stop: boolean;
-    epochs_without_improvement: number;
-    best_epoch: number;
-    best_f1: number;
-    current_f1: number;
-    improvement: number;
-    message: string;
-  } | null;
-}
-
-interface AgentLog {
-  log_id: number;
-  epoch_number: number;
-  agent_type: string;
-  system_prompt: string;
-  input_summary: string;
-  output_summary: string;
-  timestamp: string;
-  details: any; // JSON field containing raw agent output
-}
+import type { TrainingStatus, AgentLog } from '@/lib/types';
 
 export default function TrainPage() {
   const [runId, setRunId] = useState<number | null>(null);

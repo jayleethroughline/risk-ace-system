@@ -1,89 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-
-interface EpochData {
-  epoch_number: number;
-  overall_f1: number;
-  category_f1: number;
-  risk_f1: number;
-  accuracy: number;
-  playbook_size: number;
-  errors_found: number;
-  heuristics_added: number;
-}
-
-interface TrainingRunSummary {
-  run_id: number;
-  name: string;
-  status: string;
-  started_at: string | null;
-  completed_at: string | null;
-  failure_reason?: string | null;
-  best_epoch: {
-    epoch_number: number;
-    overall_f1: number;
-    category_f1: number;
-    risk_f1: number;
-    accuracy: number;
-  } | null;
-  epochs: EpochData[];
-  dataset: {
-    training_samples: number;
-    eval_samples: number;
-  };
-}
-
-interface Reflection {
-  reflection_id: number;
-  run_id: number;
-  epoch_number: number;
-  error_type: string;
-  correct_approach: string;
-  key_insight: string;
-  affected_section: string;
-  tag: string;
-  input_text: string;
-  predicted: string;
-  expected: string;
-  created_at: string;
-}
-
-interface Heuristic {
-  bullet_id: string;
-  section: string;
-  content: string;
-  helpful_count: number;
-  harmful_count: number;
-  run_id: number;
-  epoch_number: number;
-  last_updated: string;
-}
-
-interface AgentLog {
-  log_id: number;
-  epoch_number: number;
-  agent_type: string;
-  system_prompt: string;
-  input_summary: string;
-  output_summary: string;
-  timestamp: string;
-  details: any;
-}
-
-interface DatasetSample {
-  data_id: number;
-  data_type: string;
-  text: string;
-  true_category: string;
-  true_risk: string;
-}
-
-interface DatasetData {
-  run_id: number;
-  train: DatasetSample[];
-  eval: DatasetSample[];
-}
+import type {
+  EpochData,
+  TrainingRunSummary,
+  Reflection,
+  Heuristic,
+  AgentLog,
+  DatasetSample,
+  DatasetData,
+} from '@/lib/types';
 
 export default function MetricsPage() {
   const [runs, setRuns] = useState<TrainingRunSummary[]>([]);
