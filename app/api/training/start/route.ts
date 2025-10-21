@@ -87,8 +87,22 @@ export async function POST(req: Request) {
     // Start training if requested
     if (auto_start) {
       // Run training asynchronously (don't await)
-      runTraining(run.run_id).catch((error) => {
+      runTraining(run.run_id).catch(async (error) => {
         console.error('Training failed:', error);
+        // Update database status to failed
+        try {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          await db
+            .update(trainingRun)
+            .set({
+              status: 'failed',
+              completed_at: new Date(),
+              failure_reason: `Training failed with error: ${errorMessage}`,
+            })
+            .where(eq(trainingRun.run_id, run.run_id));
+        } catch (dbError) {
+          console.error('Failed to update run status to failed:', dbError);
+        }
       });
 
       return NextResponse.json({
@@ -150,8 +164,22 @@ export async function GET(req: Request) {
     }
 
     // Start training asynchronously
-    runTraining(run_id).catch((error) => {
+    runTraining(run_id).catch(async (error) => {
       console.error('Training failed:', error);
+      // Update database status to failed
+      try {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await db
+          .update(trainingRun)
+          .set({
+            status: 'failed',
+            completed_at: new Date(),
+            failure_reason: `Training failed with error: ${errorMessage}`,
+          })
+          .where(eq(trainingRun.run_id, run_id));
+      } catch (dbError) {
+        console.error('Failed to update run status to failed:', dbError);
+      }
     });
 
     return NextResponse.json({

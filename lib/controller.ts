@@ -34,6 +34,21 @@ export interface EpochStatus {
 }
 
 /**
+ * Updates the last_activity_at timestamp to indicate the run is still alive
+ */
+async function updateHeartbeat(runId: number): Promise<void> {
+  try {
+    await db
+      .update(trainingRun)
+      .set({ last_activity_at: new Date() })
+      .where(eq(trainingRun.run_id, runId));
+  } catch (error) {
+    console.error('Failed to update heartbeat:', error);
+    // Don't throw - heartbeat failure shouldn't stop training
+  }
+}
+
+/**
  * Generator: Classifies a single text using current playbook
  */
 async function classifyText(
@@ -240,10 +255,13 @@ export async function runTrainingEpoch(
   console.log(`\n🔄 Starting Epoch ${epochNumber} for run_id ${config.run_id}`);
 
   try {
-    // Update training run status
+    // Update training run status and heartbeat
     await db
       .update(trainingRun)
-      .set({ status: 'running' })
+      .set({
+        status: 'running',
+        last_activity_at: new Date() // Heartbeat at start of epoch
+      })
       .where(eq(trainingRun.run_id, config.run_id));
 
     // 1. Load eval dataset
@@ -360,6 +378,9 @@ export async function runTrainingEpoch(
 
     console.log(`✅ Generator complete: ${predictions.length} predictions, ${errors.length} errors, avg ${avgGeneratorLatency}ms`);
 
+    // Update heartbeat after Generator
+    await updateHeartbeat(config.run_id);
+
     // Log Generator activity
     await db.insert(agentLog).values({
       run_id: config.run_id,
@@ -461,6 +482,9 @@ export async function runTrainingEpoch(
 
     console.log(`✅ Reflector complete: ${reflectionResults.length} reflections, avg ${avgReflectorLatency}ms`);
 
+    // Update heartbeat after Reflector
+    await updateHeartbeat(config.run_id);
+
     // Log Reflector activity
     if (reflectionResults.length > 0) {
       await db.insert(agentLog).values({
@@ -550,6 +574,9 @@ export async function runTrainingEpoch(
 
     console.log(`✅ Curator complete: ${heuristicsAdded} heuristics added, avg ${avgCuratorLatency}ms`);
 
+    // Update heartbeat after Curator
+    await updateHeartbeat(config.run_id);
+
     // Log Curator activity
     if (heuristicsAdded > 0) {
       await db.insert(agentLog).values({
@@ -620,6 +647,7 @@ export async function runTraining(runId: number): Promise<void> {
       .set({
         status: 'running',
         started_at: new Date(),
+        last_activity_at: new Date(), // Initial heartbeat
       })
       .where(eq(trainingRun.run_id, runId));
 
@@ -698,11 +726,13 @@ export async function runTraining(runId: number): Promise<void> {
       .where(eq(trainingRun.run_id, runId));
   } catch (error) {
     console.error('Error in training loop:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     await db
       .update(trainingRun)
       .set({
         status: 'failed',
         completed_at: new Date(),
+        failure_reason: `Training loop error: ${errorMessage}`,
       })
       .where(eq(trainingRun.run_id, runId));
     throw error;

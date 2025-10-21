@@ -19,6 +19,7 @@ interface TrainingRunSummary {
   status: string;
   started_at: string | null;
   completed_at: string | null;
+  failure_reason?: string | null;
   best_epoch: {
     epoch_number: number;
     overall_f1: number;
@@ -101,6 +102,16 @@ export default function MetricsPage() {
   const [activeTab, setActiveTab] = useState<'train' | 'eval'>('train');
 
   useEffect(() => {
+    // Run recovery check on startup
+    fetch('/api/training/recover', { method: 'POST' })
+      .then(res => res.json())
+      .then(data => {
+        if (data.stuck_runs_recovered > 0 || data.timed_out_runs > 0) {
+          console.log('Recovered stuck runs:', data);
+        }
+      })
+      .catch(err => console.error('Recovery check failed:', err));
+
     fetchAllRuns();
   }, []);
 
@@ -357,6 +368,14 @@ export default function MetricsPage() {
                             >
                               {stoppingRunId === run.run_id ? 'Stopping...' : 'Stop'}
                             </button>
+                          )}
+                          {(run.status === 'failed' || run.status === 'stopped') && run.failure_reason && (
+                            <span
+                              className="text-gray-400 hover:text-gray-600 cursor-help text-sm"
+                              title={run.failure_reason}
+                            >
+                              ⓘ
+                            </span>
                           )}
                         </div>
                       </td>

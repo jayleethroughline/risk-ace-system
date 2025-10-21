@@ -11,18 +11,6 @@ export const playbook = pgTable('playbook', {
   last_updated: timestamp('last_updated').defaultNow(),
 });
 
-export const evalLog = pgTable('eval_log', {
-  id: serial('id').primaryKey(),
-  input_text: text('input_text'),
-  predicted_category: text('predicted_category'),
-  predicted_risk: text('predicted_risk'),
-  true_category: text('true_category'),
-  true_risk: text('true_risk'),
-  correct: integer('correct'),
-  latency_ms: integer('latency_ms'),
-  timestamp: timestamp('timestamp').defaultNow(),
-});
-
 export const reflections = pgTable('reflections', {
   reflection_id: serial('reflection_id').primaryKey(),
   run_id: integer('run_id'), // Track which run this reflection belongs to
@@ -47,7 +35,9 @@ export const trainingRun = pgTable('training_run', {
   plateau_patience: integer('plateau_patience').default(3), // epochs to wait
   status: text('status').default('pending'), // pending, running, completed, stopped, failed
   started_at: timestamp('started_at'),
+  last_activity_at: timestamp('last_activity_at'), // heartbeat for detecting stuck runs
   completed_at: timestamp('completed_at'),
+  failure_reason: text('failure_reason'), // explanation for stopped/failed status
   created_at: timestamp('created_at').defaultNow(),
 });
 

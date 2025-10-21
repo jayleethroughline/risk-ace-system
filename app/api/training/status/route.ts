@@ -95,6 +95,7 @@ export async function GET(req: Request) {
       status: run.status,
       started_at: run.started_at,
       completed_at: run.completed_at,
+      failure_reason: run.failure_reason,
       config: {
         max_epochs: run.max_epochs,
         plateau_threshold: run.plateau_threshold,
