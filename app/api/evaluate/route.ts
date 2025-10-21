@@ -3,6 +3,8 @@ import { db } from '@/lib/db';
 import { evalLog } from '@/lib/schema';
 import { sql } from 'drizzle-orm';
 
+export const dynamic = 'force-dynamic';
+
 interface MetricsResult {
   precision: number;
   recall: number;

@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+
 import { db } from '@/lib/db';
+
 import { reflections } from '@/lib/schema';
+
 import { eq, and } from 'drizzle-orm';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {

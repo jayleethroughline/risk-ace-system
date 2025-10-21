@@ -4,6 +4,8 @@ import { trainingRun, epochResult, trainingData } from '@/lib/schema';
 import { eq, and } from 'drizzle-orm';
 import { detectPlateau } from '@/lib/plateau-detector';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);

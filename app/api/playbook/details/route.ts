@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
+
 import { db } from '@/lib/db';
+
 import { reflections, agentLog } from '@/lib/schema';
+
 import { and, eq } from 'drizzle-orm';
+
+export const dynamic = 'force-dynamic';
 
 // GET heuristic details for a specific run_id and epoch_number
 export async function GET(req: Request) {
