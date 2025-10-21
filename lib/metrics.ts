@@ -23,6 +23,7 @@ export interface Prediction {
   predicted_risk: string;
   true_category: string;
   true_risk: string;
+  heuristics_used?: string[]; // Optional: heuristics cited during classification
 }
 
 function calculateMetrics(

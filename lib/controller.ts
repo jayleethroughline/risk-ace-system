@@ -320,6 +320,7 @@ export async function runTrainingEpoch(
           predicted_risk: risk_level,
           true_category: sample.true_category || '',
           true_risk: sample.true_risk || '',
+          heuristics_used,
         });
 
         // Determine if prediction was correct
@@ -372,6 +373,8 @@ export async function runTrainingEpoch(
         errors_count: errors.length,
         total_latency_ms: totalGeneratorLatency,
         avg_latency_ms: avgGeneratorLatency,
+        predictions, // Full predictions with heuristics_used
+        heuristics_tracking: heuristicsTracking, // Summary of helpful/harmful counts
       },
     });
 
