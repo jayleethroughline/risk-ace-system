@@ -102,9 +102,20 @@ export default function TrainPage() {
   useEffect(() => {
     if (!runId || !isPolling) return;
 
-    const interval = setInterval(async () => {
+    const fetchStatus = async () => {
       try {
         const res = await fetch(`/api/training/status?run_id=${runId}`);
+
+        // If we get a 404, the run doesn't exist - clear everything
+        if (!res.ok) {
+          console.error(`Status API returned ${res.status}`);
+          setRunId(null);
+          setIsPolling(false);
+          setStatus(null);
+          setError('Previous training run not found. Please start a new run.');
+          return;
+        }
+
         const data = await res.json();
         setStatus(data);
 
@@ -114,8 +125,18 @@ export default function TrainPage() {
         }
       } catch (err) {
         console.error('Error polling status:', err);
+        setRunId(null);
+        setIsPolling(false);
+        setStatus(null);
+        setError('Failed to load training status. Please start a new run.');
       }
-    }, 3000); // Poll every 3 seconds
+    };
+
+    // Fetch immediately on mount
+    fetchStatus();
+
+    // Then poll every 3 seconds
+    const interval = setInterval(fetchStatus, 3000);
 
     return () => clearInterval(interval);
   }, [runId, isPolling]);
