@@ -480,6 +480,7 @@ export async function runTrainingEpoch(
     let heuristicsAdded = 0;
     const newHeuristics = [];
     let totalCuratorLatency = 0;
+    let globalBulletIndex = 0; // Global counter across all reflections
 
     for (const reflection of reflectionResults) {
       try {
@@ -494,14 +495,15 @@ export async function runTrainingEpoch(
 
         for (let i = 0; i < bullets.length; i++) {
           const bullet = bullets[i];
+          globalBulletIndex++; // Increment global counter
 
           // Extract risk level from bullet content
           const riskMatch = bullet.content.match(/=\s*(CRITICAL|HIGH|MEDIUM|LOW)\s*risk/i);
           const riskLevel = riskMatch ? riskMatch[1].toLowerCase() : 'medium';
 
-          // Generate bullet_id in format: category-risk-r#-e#-index
-          // Adding index to handle multiple heuristics with same risk level in same epoch
-          const bullet_id = `${bullet.section}-${riskLevel}-r${config.run_id}-e${epochNumber}-${i + 1}`;
+          // Generate bullet_id in format: category-risk-r#-e#-globalIndex
+          // Using global index to ensure uniqueness across all reflections in the epoch
+          const bullet_id = `${bullet.section}-${riskLevel}-r${config.run_id}-e${epochNumber}-${globalBulletIndex}`;
 
           try {
             const [inserted] = await db
