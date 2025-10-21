@@ -9,7 +9,7 @@ import {
   playbook,
   reflections,
 } from './schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import { callLLMWithJSON, callLLM } from './models';
 import {
   evaluatePredictions,
@@ -145,11 +145,11 @@ Respond in this exact JSON format:
  */
 async function generateHeuristics(
   reflection: {
-    error_type: string;
-    correct_approach: string;
-    key_insight: string;
-    affected_section: string;
-    tag: string;
+    error_type: string | null;
+    correct_approach: string | null;
+    key_insight: string | null;
+    affected_section: string | null;
+    tag: string | null;
   },
   currentPlaybook: Array<{ section: string; content: string }>
 ): Promise<{ bullets: Array<{ section: string; content: string }>; latency_ms: number }> {
@@ -163,11 +163,11 @@ CURRENT PLAYBOOK:
 ${playbookContext || 'Empty playbook'}
 
 NEW REFLECTION:
-- Error Type: ${reflection.error_type}
-- Correct Approach: ${reflection.correct_approach}
-- Key Insight: ${reflection.key_insight}
-- Affected Section: ${reflection.affected_section}
-- Tag: ${reflection.tag}
+- Error Type: ${reflection.error_type || 'unknown'}
+- Correct Approach: ${reflection.correct_approach || 'N/A'}
+- Key Insight: ${reflection.key_insight || 'N/A'}
+- Affected Section: ${reflection.affected_section || 'other_emergency'}
+- Tag: ${reflection.tag || 'general'}
 
 Based on this reflection, generate 1-2 NEW heuristic bullets that should be added to the playbook.
 Each bullet should be:
@@ -207,9 +207,9 @@ Respond in JSON format:
   }
 
   const bullets = parsed.bullets.map((b: any) => ({
-    section: b.section || reflection.affected_section,
+    section: b.section || reflection.affected_section || 'other_emergency',
     content: b.content || '',
-  })).filter(b => b.content.trim().length > 0);
+  })).filter((b: { section: string; content: string }) => b.content.trim().length > 0);
 
   if (bullets.length === 0) {
     console.warn('⚠️  Curator generated empty bullets:', parsed.bullets);
@@ -244,8 +244,10 @@ export async function runTrainingEpoch(
     const evalDataset = await db
       .select()
       .from(trainingData)
-      .where(eq(trainingData.run_id, config.run_id))
-      .where(eq(trainingData.data_type, 'eval'));
+      .where(and(
+        eq(trainingData.run_id, config.run_id),
+        eq(trainingData.data_type, 'eval')
+      ));
 
     console.log(`✓ Loaded ${evalDataset.length} eval samples`);
 
@@ -260,10 +262,16 @@ export async function runTrainingEpoch(
 
     // 2. Load current playbook
     console.log(`📖 Loading playbook...`);
-    const currentPlaybook = await db
+    const playbookRaw = await db
       .select({ section: playbook.section, content: playbook.content })
       .from(playbook)
       .orderBy(desc(playbook.helpful_count));
+
+    // Filter out null values and type-cast
+    const currentPlaybook: Array<{ section: string; content: string }> = playbookRaw
+      .filter((b): b is { section: string; content: string } =>
+        b.section !== null && b.content !== null
+      );
 
     console.log(`✓ Loaded ${currentPlaybook.length} playbook heuristics`);
 

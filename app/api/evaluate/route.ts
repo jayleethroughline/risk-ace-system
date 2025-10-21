@@ -84,7 +84,7 @@ export async function GET(req: Request) {
       const categoryMetrics: Record<string, any> = {};
 
       // Get unique categories
-      const categories = [...new Set(logs.map((log) => log.true_category))];
+      const categories = Array.from(new Set(logs.map((log) => log.true_category)));
 
       for (const category of categories) {
         if (!category) continue;
@@ -137,7 +137,7 @@ export async function GET(req: Request) {
       const riskMetrics: Record<string, any> = {};
 
       // Get unique risk levels
-      const riskLevels = [...new Set(logs.map((log) => log.true_risk))];
+      const riskLevels = Array.from(new Set(logs.map((log) => log.true_risk)));
 
       for (const risk of riskLevels) {
         if (!risk) continue;

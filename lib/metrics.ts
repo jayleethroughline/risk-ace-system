@@ -73,7 +73,7 @@ export function evaluatePredictions(
   const accuracy = correct / predictions.length;
 
   // Calculate category-level metrics
-  const categories = [...new Set(predictions.map((p) => p.true_category))];
+  const categories = Array.from(new Set(predictions.map((p) => p.true_category)));
   const categoryMetrics: Record<string, ClassificationMetrics> = {};
 
   for (const category of categories) {
@@ -106,7 +106,7 @@ export function evaluatePredictions(
   }
 
   // Calculate risk-level metrics
-  const riskLevels = [...new Set(predictions.map((p) => p.true_risk))];
+  const riskLevels = Array.from(new Set(predictions.map((p) => p.true_risk)));
   const riskMetrics: Record<string, ClassificationMetrics> = {};
 
   for (const risk of riskLevels) {
