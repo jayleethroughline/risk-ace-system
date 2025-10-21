@@ -6,16 +6,35 @@ import { eq, desc } from 'drizzle-orm';
 // GET all playbook entries
 export async function GET() {
   try {
+    // Check environment
+    const hasPostgresUrl = !!process.env.POSTGRES_URL;
+    console.log('Environment check:', {
+      hasPostgresUrl,
+      nodeEnv: process.env.NODE_ENV,
+      vercelEnv: process.env.VERCEL_ENV,
+    });
+
     const entries = await db
       .select()
       .from(playbook)
       .orderBy(desc(playbook.helpful_count));
 
+    console.log(`Successfully fetched ${entries.length} playbook entries`);
     return NextResponse.json({ playbook: entries });
   } catch (error) {
     console.error('Error fetching playbook:', error);
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      name: error instanceof Error ? error.name : undefined,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+
     return NextResponse.json(
-      { error: 'Failed to fetch playbook' },
+      {
+        error: 'Failed to fetch playbook',
+        details: error instanceof Error ? error.message : 'Unknown error',
+        hasPostgresUrl: !!process.env.POSTGRES_URL,
+      },
       { status: 500 }
     );
   }
