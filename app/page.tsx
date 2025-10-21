@@ -262,9 +262,12 @@ export default function MetricsPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900">ACE Framework Dashboard</h1>
           <p className="mt-2 text-gray-600">
-            View performance metrics and epoch history for all training runs
+            <span className="font-semibold">Agent Context Engineering (ACE):</span> An iterative learning system where the{' '}
+            <span className="text-blue-600 font-medium">Generator</span> classifies inputs using a playbook,{' '}
+            <span className="text-purple-600 font-medium">Reflector</span> analyzes errors to identify failure patterns, and{' '}
+            <span className="text-green-600 font-medium">Curator</span> generates new heuristics to improve the playbook.
           </p>
         </div>
         <a
@@ -639,7 +642,13 @@ export default function MetricsPage() {
                                     <>
                                       <h4 className="font-semibold text-purple-700 mb-2 flex items-center gap-2">
                                         <span className="text-lg">🔍</span>
-                                        Reflector Analysis ({epochReflections.length})
+                                        <span>Reflector Analysis ({epochReflections.length})</span>
+                                        <span
+                                          className="text-gray-400 cursor-help text-sm"
+                                          title="Reflector: Analyzes classification errors to identify why the Generator failed. For each error, it determines the error type (e.g., risk overestimation, category misclassification), explains the correct approach, extracts key insights, and tags the failure pattern. These reflections guide the Curator in generating targeted heuristics."
+                                        >
+                                          ⓘ
+                                        </span>
                                       </h4>
                                       <div className="space-y-3">
                                         {epochReflections.map((reflection) => {
@@ -709,7 +718,13 @@ export default function MetricsPage() {
                                     <>
                                       <h4 className="font-semibold text-green-700 mb-2 flex items-center gap-2">
                                         <span className="text-lg">📝</span>
-                                        Curator Heuristics ({epochHeuristics.length})
+                                        <span>Curator Heuristics ({epochHeuristics.length})</span>
+                                        <span
+                                          className="text-gray-400 cursor-help text-sm"
+                                          title="Curator: Generates new classification heuristics based on Reflector insights. For each reflection, it creates 1-2 actionable rules that help the Generator avoid similar errors. These heuristics are added to the playbook and include the risk level and specific guidance for classification decisions."
+                                        >
+                                          ⓘ
+                                        </span>
                                       </h4>
                                       <div className="space-y-2">
                                         {epochHeuristics.map((heuristic) => (
