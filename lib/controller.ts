@@ -9,7 +9,7 @@ import {
   playbook,
   reflections,
 } from './schema';
-import { eq, desc, and, sql } from 'drizzle-orm';
+import { eq, desc, and, sql, or, lte, isNull } from 'drizzle-orm';
 import { callLLMWithJSON, callLLM } from './models';
 import {
   evaluatePredictions,
@@ -92,6 +92,7 @@ export async function runTrainingEpoch(
     }
 
     // 2. Load current playbook
+    // Only load baseline entries (run_id = null) + entries from this run up to this epoch
     console.log(`📖 Loading playbook...`);
     const playbookRaw = await db
       .select({
@@ -100,6 +101,15 @@ export async function runTrainingEpoch(
         content: playbook.content
       })
       .from(playbook)
+      .where(
+        or(
+          isNull(playbook.run_id), // Baseline entries
+          and(
+            eq(playbook.run_id, config.run_id),
+            lte(playbook.epoch_number, epochNumber)
+          )
+        )
+      )
       .orderBy(desc(playbook.helpful_count));
 
     // Filter out null values and type-cast
