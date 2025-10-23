@@ -526,7 +526,8 @@ export default function TrainPage() {
                             <th className="px-4 py-2 text-left">Category F1</th>
                             <th className="px-4 py-2 text-left">Risk F1</th>
                             <th className="px-4 py-2 text-left">Accuracy</th>
-                            <th className="px-4 py-2 text-left">TOKEN PLAYBOOK SIZE</th>
+                            <th className="px-4 py-2 text-left">Token</th>
+                            <th className="px-4 py-2 text-left">Playbook Size</th>
                             <th className="px-4 py-2 text-left">Errors</th>
                             <th className="px-4 py-2 text-left">Heuristics Added</th>
                           </tr>
@@ -546,6 +547,7 @@ export default function TrainPage() {
                               >
                                 {epoch.token_count?.toLocaleString() || 'Loading...'}
                               </td>
+                              <td className="px-4 py-2">{epoch.playbook_size}</td>
                               <td className="px-4 py-2">{epoch.errors_found}</td>
                               <td className="px-4 py-2">{epoch.heuristics_added}</td>
                             </tr>

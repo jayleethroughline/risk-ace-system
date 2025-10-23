@@ -433,7 +433,10 @@ export default function MetricsPage() {
                             </span>
                           </th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            TOKEN PLAYBOOK SIZE
+                            Token
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Playbook Size
                           </th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Errors
@@ -485,6 +488,9 @@ export default function MetricsPage() {
                               title="Click to view playbook prompt"
                             >
                               {epoch.token_count?.toLocaleString() || 'Loading...'}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                              {epoch.playbook_size}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                               {epoch.errors_found}
