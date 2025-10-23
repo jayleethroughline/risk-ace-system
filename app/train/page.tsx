@@ -12,6 +12,17 @@ export default function TrainPage() {
   const [loading, setLoading] = useState(false);
   const [currentSample, setCurrentSample] = useState<string>('');
   const [selectedLog, setSelectedLog] = useState<AgentLog | null>(null);
+  const [selectedPlaybook, setSelectedPlaybook] = useState<{
+    epoch_number: number;
+    run_id: number;
+    playbook_size: number;
+  } | null>(null);
+  const [playbookData, setPlaybookData] = useState<{
+    full_prompt: string;
+    token_count: number;
+    playbook_size: number;
+  } | null>(null);
+  const [loadingPlaybook, setLoadingPlaybook] = useState(false);
 
   // Form state
   const [name, setName] = useState('');
@@ -151,6 +162,32 @@ export default function TrainPage() {
       setter(content);
     };
     reader.readAsText(file);
+  };
+
+  const handlePlaybookClick = async (epoch_number: number, playbook_size: number) => {
+    if (!runId) return;
+
+    setSelectedPlaybook({ epoch_number, run_id: runId, playbook_size });
+    setLoadingPlaybook(true);
+
+    try {
+      const res = await fetch(`/api/training/playbook-snapshot?run_id=${runId}&epoch_number=${epoch_number}`);
+      const data = await res.json();
+
+      if (res.ok) {
+        setPlaybookData({
+          full_prompt: data.full_prompt,
+          token_count: data.token_count,
+          playbook_size: data.playbook_size,
+        });
+      } else {
+        console.error('Failed to fetch playbook:', data.error);
+      }
+    } catch (err) {
+      console.error('Error fetching playbook:', err);
+    } finally {
+      setLoadingPlaybook(false);
+    }
   };
 
   return (
@@ -489,7 +526,7 @@ export default function TrainPage() {
                             <th className="px-4 py-2 text-left">Category F1</th>
                             <th className="px-4 py-2 text-left">Risk F1</th>
                             <th className="px-4 py-2 text-left">Accuracy</th>
-                            <th className="px-4 py-2 text-left">Playbook Size</th>
+                            <th className="px-4 py-2 text-left">TOKEN PLAYBOOK SIZE</th>
                             <th className="px-4 py-2 text-left">Errors</th>
                             <th className="px-4 py-2 text-left">Heuristics Added</th>
                           </tr>
@@ -502,7 +539,13 @@ export default function TrainPage() {
                               <td className="px-4 py-2">{epoch.category_f1.toFixed(4)}</td>
                               <td className="px-4 py-2">{epoch.risk_f1.toFixed(4)}</td>
                               <td className="px-4 py-2">{epoch.accuracy.toFixed(4)}</td>
-                              <td className="px-4 py-2">{epoch.playbook_size}</td>
+                              <td
+                                className="px-4 py-2 text-blue-600 hover:text-blue-800 cursor-pointer hover:underline"
+                                onClick={() => handlePlaybookClick(epoch.epoch_number, epoch.playbook_size)}
+                                title="Click to view playbook prompt"
+                              >
+                                {epoch.token_count?.toLocaleString() || 'Loading...'}
+                              </td>
                               <td className="px-4 py-2">{epoch.errors_found}</td>
                               <td className="px-4 py-2">{epoch.heuristics_added}</td>
                             </tr>
@@ -562,6 +605,107 @@ export default function TrainPage() {
           </div>
         )}
       </div>
+
+      {/* Playbook Viewer Modal */}
+      {selectedPlaybook && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => {
+            setSelectedPlaybook(null);
+            setPlaybookData(null);
+          }}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="bg-gray-100 px-6 py-4 border-b flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold">
+                  Playbook Prompt - Epoch {selectedPlaybook.epoch_number}
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Complete Generator prompt including all heuristics
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedPlaybook(null);
+                  setPlaybookData(null);
+                }}
+                className="text-gray-500 hover:text-gray-700 text-2xl font-bold"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-auto p-6">
+              {loadingPlaybook ? (
+                <div className="flex items-center justify-center h-64">
+                  <div className="text-lg text-gray-600">Loading playbook...</div>
+                </div>
+              ) : playbookData ? (
+                <div className="space-y-4">
+                  {/* Stats */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <div className="text-gray-600 font-semibold">Playbook Size</div>
+                        <div className="text-2xl font-bold text-blue-700">{playbookData.playbook_size} heuristics</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-600 font-semibold">Token Count (approx.)</div>
+                        <div className="text-2xl font-bold text-blue-700">{playbookData.token_count.toLocaleString()} tokens</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-600 font-semibold">Prompt Length</div>
+                        <div className="text-2xl font-bold text-blue-700">{playbookData.full_prompt.length.toLocaleString()} chars</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Full Prompt */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-semibold text-gray-700">Full Generator Prompt</h4>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(playbookData.full_prompt);
+                        }}
+                        className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                      >
+                        Copy to Clipboard
+                      </button>
+                    </div>
+                    <div className="bg-gray-900 rounded p-4 overflow-x-auto max-h-[500px]">
+                      <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap">
+                        {playbookData.full_prompt}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-500 italic">Failed to load playbook data</div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-gray-100 px-6 py-3 border-t flex justify-end">
+              <button
+                onClick={() => {
+                  setSelectedPlaybook(null);
+                  setPlaybookData(null);
+                }}
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* JSON Viewer Modal */}
       {selectedLog && (

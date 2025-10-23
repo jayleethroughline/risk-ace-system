@@ -11,6 +11,7 @@ export interface EpochData {
   risk_f1: number;
   accuracy: number;
   playbook_size: number;
+  token_count?: number;
   errors_found: number;
   heuristics_added: number;
 }

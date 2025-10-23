@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { trainingRun, epochResult, trainingData } from '@/lib/schema';
-import { eq, and } from 'drizzle-orm';
+import { trainingRun, epochResult, trainingData, playbook } from '@/lib/schema';
+import { eq, and, or, lte, isNull } from 'drizzle-orm';
 import { detectPlateau } from '@/lib/plateau-detector';
+import { createGeneratorPrompt } from '@/lib/prompts';
 
 export const dynamic = 'force-dynamic';
 
@@ -89,6 +90,60 @@ export async function GET(req: Request) {
       });
     }
 
+    // Calculate token counts for each epoch
+    const epochsWithTokens = await Promise.all(
+      epochs.map(async (epoch) => {
+        const epoch_number = epoch.epoch_number || 0;
+
+        // Get playbook state at this epoch
+        const playbookEntries = await db
+          .select({
+            bullet_id: playbook.bullet_id,
+            section: playbook.section,
+            content: playbook.content,
+          })
+          .from(playbook)
+          .where(
+            or(
+              isNull(playbook.run_id), // Baseline entries
+              and(
+                eq(playbook.run_id, run_id),
+                lte(playbook.epoch_number, epoch_number)
+              )
+            )
+          );
+
+        const validEntries = playbookEntries
+          .filter((b): b is { bullet_id: string; section: string; content: string } =>
+            b.bullet_id !== null && b.section !== null && b.content !== null
+          );
+
+        // Format playbook context
+        const context = validEntries
+          .map((b) => `[ID: ${b.bullet_id}] [${b.section}] ${b.content}`)
+          .join('\n');
+
+        // Create full prompt
+        const fullPrompt = createGeneratorPrompt(context, '{{USER_INPUT}}');
+
+        // Calculate token count (approximate: 4 chars per token)
+        const tokenCount = Math.ceil(fullPrompt.length / 4);
+
+        return {
+          epoch_number: epoch.epoch_number,
+          overall_f1: epoch.overall_f1,
+          category_f1: epoch.category_f1,
+          risk_f1: epoch.risk_f1,
+          accuracy: epoch.accuracy,
+          playbook_size: epoch.playbook_size,
+          token_count: tokenCount,
+          errors_found: epoch.errors_found,
+          heuristics_added: epoch.heuristics_added,
+          created_at: epoch.created_at,
+        };
+      })
+    );
+
     return NextResponse.json({
       run_id,
       name: run.name,
@@ -110,17 +165,7 @@ export async function GET(req: Request) {
         max_epochs: maxEpochs,
         progress_percent: progress,
       },
-      epochs: epochs.map((e) => ({
-        epoch_number: e.epoch_number,
-        overall_f1: e.overall_f1,
-        category_f1: e.category_f1,
-        risk_f1: e.risk_f1,
-        accuracy: e.accuracy,
-        playbook_size: e.playbook_size,
-        errors_found: e.errors_found,
-        heuristics_added: e.heuristics_added,
-        created_at: e.created_at,
-      })),
+      epochs: epochsWithTokens,
       best_epoch: bestEpoch
         ? {
             epoch_number: bestEpoch.epoch_number,
