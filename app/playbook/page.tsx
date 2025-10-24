@@ -29,10 +29,31 @@ export default function PlaybookPage() {
   const [loading, setLoading] = useState(true);
   const [selectedCell, setSelectedCell] = useState<{ category: string; risk: string } | null>(null);
   const [maxRunId, setMaxRunId] = useState<number>(0);
+  const [viewMode, setViewMode] = useState<'baseline' | 'best'>('best');
+  const [bestRunInfo, setBestRunInfo] = useState<{run_id: number; epoch_number: number; playbook_size: number} | null>(null);
+  const [tokenCount, setTokenCount] = useState<number>(0);
 
   useEffect(() => {
     fetchPlaybook();
+    fetchBestRun();
   }, []);
+
+  // Update token count when view mode changes
+  useEffect(() => {
+    if (viewMode === 'baseline') {
+      // Calculate token count for baseline only
+      fetch('/api/training/playbook-snapshot?run_id=1&epoch_number=1')
+        .then(res => res.json())
+        .then(data => setTokenCount(data.token_count || 0))
+        .catch(() => setTokenCount(0));
+    } else if (bestRunInfo) {
+      // Token count already fetched for best run
+      fetch(`/api/training/playbook-snapshot?run_id=${bestRunInfo.run_id}&epoch_number=${bestRunInfo.epoch_number}`)
+        .then(res => res.json())
+        .then(data => setTokenCount(data.token_count || 0))
+        .catch(() => setTokenCount(0));
+    }
+  }, [viewMode, bestRunInfo]);
 
   const fetchPlaybook = async () => {
     try {
@@ -50,6 +71,54 @@ export default function PlaybookPage() {
     }
   };
 
+  const fetchBestRun = async () => {
+    try {
+      // Get all completed/stopped runs
+      const debugRes = await fetch('/api/debug/data-count');
+      const debugData = await debugRes.json();
+      const runs = debugData.runs || [];
+
+      // Get status for each run to find best epoch
+      let bestRun: {run_id: number; epoch_number: number; overall_f1: number; playbook_size: number} | null = null;
+
+      for (const run of runs) {
+        if (run.status === 'completed' || run.status === 'stopped' || run.status === 'failed') {
+          const statusRes = await fetch(`/api/training/status?run_id=${run.run_id}`);
+          const statusData = await statusRes.json();
+
+          if (statusData.best_epoch) {
+            const f1 = statusData.best_epoch.overall_f1;
+            if (!bestRun || f1 > bestRun.overall_f1) {
+              // Get playbook size from epochs array
+              const epoch = statusData.epochs.find((e: any) => e.epoch_number === statusData.best_epoch.epoch_number);
+              bestRun = {
+                run_id: run.run_id,
+                epoch_number: statusData.best_epoch.epoch_number,
+                overall_f1: f1,
+                playbook_size: epoch?.playbook_size || 0
+              };
+            }
+          }
+        }
+      }
+
+      if (bestRun) {
+        setBestRunInfo({
+          run_id: bestRun.run_id,
+          epoch_number: bestRun.epoch_number,
+          playbook_size: bestRun.playbook_size
+        });
+
+        // Fetch token count for best run
+        const snapshotRes = await fetch(`/api/training/playbook-snapshot?run_id=${bestRun.run_id}&epoch_number=${bestRun.epoch_number}`);
+        const snapshotData = await snapshotRes.json();
+        setTokenCount(snapshotData.token_count || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching best run:', error);
+    }
+  };
+
   // Get the most recent update timestamp
   const getLastUpdated = () => {
     if (playbook.length === 0) return null;
@@ -62,6 +131,43 @@ export default function PlaybookPage() {
   };
 
   const lastUpdated = getLastUpdated();
+
+  // Export playbook to markdown
+  const exportToMarkdown = () => {
+    let markdown = 'You are a risk classifier that assigns a category and risk level to user input.\n\n';
+
+    markdown += 'CATEGORIES: ';
+    markdown += categories.map(c => c.key).join(', ');
+    markdown += '\n\n';
+
+    markdown += 'RISK LEVELS: CRITICAL, HIGH, MEDIUM, LOW\n\n';
+
+    markdown += 'Use the following heuristics to guide your classification:\n\n';
+
+    // Collect ALL heuristics directly from the playbook array
+    playbook.forEach(entry => {
+      if (entry.content && entry.section) {
+        // Format: [category] content
+        markdown += `[${entry.section}] ${entry.content}\n`;
+      }
+    });
+
+    markdown += '\n';
+    markdown += 'Text to classify: {{USER_INPUT}}\n\n';
+    markdown += 'Respond with ONLY valid JSON in this exact format:\n';
+    markdown += '{"category":"<category>","risk_level":"<risk_level>"}\n';
+
+    // Create and download file
+    const blob = new Blob([markdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `playbook-prompt-${new Date().toISOString().split('T')[0]}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   // Organize playbook as matrix: categories x risk levels
   const categories = [
@@ -81,6 +187,16 @@ export default function PlaybookPage() {
 
   const riskLevels = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
 
+  // Filter playbook based on view mode
+  const filteredPlaybook = viewMode === 'baseline'
+    ? playbook.filter(e => e.run_id === null) // Only baseline entries
+    : bestRunInfo
+      ? playbook.filter(e =>
+          e.run_id === null || // Baseline entries
+          (e.run_id === bestRunInfo.run_id && e.epoch_number !== null && e.epoch_number < bestRunInfo.epoch_number) // Best run entries before epoch
+        )
+      : playbook.filter(e => e.run_id === null); // Fallback to baseline if no best run
+
   // Group all entries by category and risk level
   const entriesByCell: Record<string, Record<string, PlaybookEntry[]>> = {};
   categories.forEach(cat => {
@@ -90,7 +206,7 @@ export default function PlaybookPage() {
     });
   });
 
-  playbook.forEach(entry => {
+  filteredPlaybook.forEach(entry => {
     const section = entry.section || 'other_emergency';
     const riskLevel = extractRiskLevel(entry.content);
     if (entriesByCell[section] && riskLevel !== 'UNKNOWN' && riskLevel !== 'OTHER') {
@@ -146,7 +262,73 @@ export default function PlaybookPage() {
             )}
           </div>
           <p className="text-sm text-gray-600">Category × Risk Level Matrix (Click cells to view revision history)</p>
+
+          {/* Playbook Info */}
+          <div className="mt-2 flex items-center gap-4 text-sm">
+            <span className="font-medium text-gray-700">
+              {viewMode === 'baseline' ? (
+                <>Showing: <span className="text-blue-600">48 Baseline Heuristics</span></>
+              ) : bestRunInfo ? (
+                <>Showing: <span className="text-blue-600">Run #{bestRunInfo.run_id}, Epoch {bestRunInfo.epoch_number} - {bestRunInfo.playbook_size} Heuristics</span></>
+              ) : (
+                <>Showing: <span className="text-blue-600">48 Baseline Heuristics</span></>
+              )}
+            </span>
+            <span className="text-gray-600">
+              Token Size: <span className="font-semibold text-gray-900">{tokenCount.toLocaleString()}</span>
+            </span>
+          </div>
         </div>
+
+        <div className="flex items-center gap-3">
+          {/* Toggle Button */}
+          <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('baseline')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                viewMode === 'baseline'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Baseline (48)
+            </button>
+            <button
+              onClick={() => setViewMode('best')}
+              disabled={!bestRunInfo}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                viewMode === 'best'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              {bestRunInfo ? `Best Run (${bestRunInfo.playbook_size})` : 'Best Run'}
+            </button>
+          </div>
+
+          <button
+            onClick={exportToMarkdown}
+            disabled={playbook.length === 0}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium transition-colors"
+            title="Export playbook to markdown file"
+          >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-5 w-5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            />
+          </svg>
+          Export
+        </button>
+      </div>
       </div>
 
       {playbook.length === 0 ? (
