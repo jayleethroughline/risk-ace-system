@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { trainingRun, epochResult, trainingData, playbook } from '@/lib/schema';
-import { eq, and, or, lte, isNull } from 'drizzle-orm';
+import { eq, and, or, lt, isNull } from 'drizzle-orm';
 import { detectPlateau } from '@/lib/plateau-detector';
 import { createGeneratorPrompt } from '@/lib/prompts';
 
@@ -95,7 +95,8 @@ export async function GET(req: Request) {
       epochs.map(async (epoch) => {
         const epoch_number = epoch.epoch_number || 0;
 
-        // Get playbook state at this epoch
+        // Get playbook state BEFORE this epoch started
+        // This matches what the Generator actually saw at the beginning of the epoch
         const playbookEntries = await db
           .select({
             bullet_id: playbook.bullet_id,
@@ -108,7 +109,7 @@ export async function GET(req: Request) {
               isNull(playbook.run_id), // Baseline entries
               and(
                 eq(playbook.run_id, run_id),
-                lte(playbook.epoch_number, epoch_number)
+                lt(playbook.epoch_number, epoch_number) // BEFORE current epoch
               )
             )
           );

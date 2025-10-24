@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { playbook } from '@/lib/schema';
-import { and, or, lte, isNull, eq } from 'drizzle-orm';
+import { and, or, lt, isNull, eq } from 'drizzle-orm';
 import { createGeneratorPrompt } from '@/lib/prompts';
 
 export const dynamic = 'force-dynamic';
@@ -26,10 +26,11 @@ export async function GET(req: Request) {
     const run_id = parseInt(runId, 10);
     const epoch_number = parseInt(epochNumber, 10);
 
-    // Get all playbook entries that existed at this epoch
+    // Get all playbook entries that existed BEFORE this epoch started
     // This includes:
     // 1. Baseline entries (run_id = null)
-    // 2. Entries from this run up to and including this epoch
+    // 2. Entries from this run from PREVIOUS epochs only (not current epoch)
+    // This matches what the Generator actually saw at the start of the epoch
     const playbookEntries = await db
       .select({
         bullet_id: playbook.bullet_id,
@@ -44,7 +45,7 @@ export async function GET(req: Request) {
           isNull(playbook.run_id), // Baseline entries
           and(
             eq(playbook.run_id, run_id),
-            lte(playbook.epoch_number, epoch_number)
+            lt(playbook.epoch_number, epoch_number) // BEFORE current epoch
           )
         )
       );
