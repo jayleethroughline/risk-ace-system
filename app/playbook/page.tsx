@@ -73,7 +73,7 @@ export default function PlaybookPage() {
 
   const fetchBestRun = async () => {
     try {
-      // Get all completed/stopped runs
+      // Get all runs to find best epoch across all training runs
       const debugRes = await fetch('/api/debug/data-count');
       const debugData = await debugRes.json();
       const runs = debugData.runs || [];
@@ -82,7 +82,7 @@ export default function PlaybookPage() {
       let bestRun: {run_id: number; epoch_number: number; overall_f1: number; playbook_size: number} | null = null;
 
       for (const run of runs) {
-        if (run.status === 'completed' || run.status === 'stopped' || run.status === 'failed') {
+        if (run.status === 'completed' || run.status === 'stopped' || run.status === 'failed' || run.status === 'running') {
           const statusRes = await fetch(`/api/training/status?run_id=${run.run_id}`);
           const statusData = await statusRes.json();
 
